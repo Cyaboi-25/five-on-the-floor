@@ -91,7 +91,9 @@
   .piece.offense { background:var(--offense); }
   .piece.defense { background:var(--defense); }
   .piece.selected { box-shadow:0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,0.5); transform:translate(-50%,-50%) scale(1.18); z-index:5; }
-  .piece.dim { opacity:0.42; }
+  /* off-turn team stays clearly visible (was 0.42 — too faint to see both teams) */
+  .piece.dim { opacity:0.72; }
+  .piece.dim:not(.setupable) { cursor:default; }
   .piece.pass-cand { box-shadow:0 0 0 3px rgba(255,255,255,0.85), 0 0 10px 2px rgba(255,255,255,0.5); cursor:pointer; }
   .piece.has-ball { border-color:#fff; }
   .piece .ball-dot { position:absolute; top:-5px; right:-5px; width:48%; height:48%; border-radius:50%;
@@ -463,6 +465,11 @@ function getPiece(id){ return state.pieces.find(p=>p.id===id); }
 function pieceLabel(p){ return (p.role==='offense'?'O':'D')+(parseInt(p.id.slice(1))+1); }
 function teamName(t){ return 'Team '+(t+1); }
 function isBallCarrier(p){ return p && p.id===state.ballCarrier; }
+function tileOccupied(col,row){ return state.pieces.some(p=>p.col===col&&p.row===row); }
+// v5.1 setup phase helpers
+function isSetup(){ return state.phase==='setup-off'||state.phase==='setup-def'; }
+function setupRole(){ return state.phase==='setup-def'?'defense':'offense'; }
+function activeRole(){ return isSetup()?setupRole():state.phase; } // whose pieces are "live" right now
 function isThreeZone(zoneKey){ return ZONE_INFO[zoneKey].points===3; }
 function paintBonusFor(zoneKey){ return PAINT_BONUS_ZONES.includes(zoneKey)?1:0; }
 
@@ -534,7 +541,7 @@ function renderPieces(){
     const el=document.createElement('div');
     el.className='piece '+p.role;
     if(p.id===state.selectedPiece) el.classList.add('selected');
-    if(p.role!==state.phase) el.classList.add('dim');
+    if(p.role===activeRole()) el.classList.add('setupable'); else el.classList.add('dim');
     if(isBallCarrier(p)) el.classList.add('has-ball');
     if(state.mode==='pass' && p.role==='offense' && !isBallCarrier(p)) el.classList.add('pass-cand');
     el.style.left=((p.col+0.5)/COLS*100)+'%';
@@ -548,7 +555,7 @@ function renderPieces(){
 }
 function renderLegal(){
   document.querySelectorAll('.tile.legal,.tile.legal-burst').forEach(t=>t.classList.remove('legal','legal-burst'));
-  if(state.mode==='pass') return;
+  if(isSetup() || state.mode==='pass') return;
   if(!state.selectedPiece) return;
   const sel=getPiece(state.selectedPiece);
   if(!sel || sel.role!==state.phase || state.actionPointsRemaining<=0) return;
@@ -584,12 +591,14 @@ function renderScoreboard(){
 }
 function renderPhaseBadge(){
   const badge=document.getElementById('phaseBadge');
-  badge.className='phase-badge '+state.phase;
+  badge.className='phase-badge '+activeRole();
+  if(isSetup()){ badge.textContent='● '+(setupRole()==='offense'?'OFFENSE SET-UP':'DEFENSE SET-UP'); return; }
   const word=state.phase==='offense'?'OFFENSE TURN':'DEFENSE RESPONDING';
   badge.textContent='● '+word+' — '+state.actionPointsRemaining+' pt'+(state.actionPointsRemaining===1?'':'s')+' left';
 }
 function renderApDots(){
   const dots=document.getElementById('apDots'); dots.innerHTML='';
+  if(isSetup()){ document.getElementById('apLabel').textContent='Pre-possession set'; return; }
   const cls=state.phase==='offense'?'off':'def';
   for(let i=0;i<AP_PER_TURN;i++){ const d=document.createElement('div');
     d.className='ap-dot'+(i<state.actionPointsRemaining?(' filled '+cls):''); dots.appendChild(d); }
@@ -597,6 +606,17 @@ function renderApDots(){
 }
 function renderActions(){
   const box=document.getElementById('actionButtons'); box.innerHTML='';
+  // v5.1 SETUP phase — both teams place their half-court set before play begins
+  if(isSetup()){
+    const role=setupRole();
+    const mk=(label,cls,handler)=>{ const b=document.createElement('button'); b.className='btn '+cls; b.innerHTML='<span>'+label+'</span>'; b.addEventListener('click',handler); box.appendChild(b); };
+    if(role==='offense') mk('Lock In Offense Set →','shoot center',()=>lockOffenseSet());
+    else mk('▶ Start Possession','shoot center',()=>startPossession());
+    mk('Reset to default spots','end center',()=>resetSetPositions());
+    const who=role==='offense'?teamName(state.possession)+' offense':teamName(1-state.possession)+' defense';
+    const s=document.createElement('div'); s.className='btn-sub'; s.textContent=who+': tap a player, then an open tile to place them.'; box.appendChild(s);
+    return;
+  }
   const ap=state.actionPointsRemaining;
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
   const mkBtn=(label,cost,cls,handler,disabled,sub)=>{
@@ -666,7 +686,7 @@ function renderAll(){
   renderPieces(); renderLegal(); drawTrails();
   renderScoreboard(); renderPhaseBadge(); renderApDots(); renderActions();
   renderCoveragePanel(); renderZonePill(); renderLog();
-  document.getElementById('endTurnBtn').disabled=busy;
+  const etb=document.getElementById('endTurnBtn'); etb.disabled=busy; etb.style.display=isSetup()?'none':'block';
 }
 
 /* ============================================================
@@ -674,6 +694,42 @@ function renderAll(){
    ============================================================ */
 function setStatus(text,kind){ const sb=document.getElementById('statusBar'); sb.textContent=text; sb.className='status-bar'+(kind?(' '+kind):''); }
 function addLog(text,type){ state.log.push({text,type:type||'system'}); if(state.log.length>50) state.log.shift(); }
+
+/* ============================================================
+   PRE-POSSESSION SETUP (v5.1)
+   Both teams arrange their half-court set before play. Offense aligns
+   first, defense matches up, then the possession (clock + AP) begins.
+   No clock or action-point cost during setup.
+   ============================================================ */
+function enterSetup(){
+  state.phase='setup-off'; state.selectedPiece=null; state.mode=null;
+  setStatus(teamName(state.possession)+' offense — arrange your half-court set. Tap a player, then an open tile. Lock in when ready.', null);
+}
+function setupMove(piece,col,row){
+  piece.col=col; piece.row=row; piece.trail=[{col,row}]; // trail baseline = the set position
+  state.selectedPiece=null;
+  setStatus(pieceLabel(piece)+' set in '+ZONE_INFO[zoneAt(col,row)].name+'. Place another, or lock in.', null);
+  renderAll();
+}
+function resetSetPositions(){
+  const role=setupRole();
+  const starts=role==='offense'?OFFENSE_START:DEFENSE_START;
+  state.pieces.filter(p=>p.role===role).forEach((p,i)=>{ p.col=starts[i].col; p.row=starts[i].row; p.trail=[{col:p.col,row:p.row}]; });
+  state.selectedPiece=null;
+  setStatus(role.charAt(0).toUpperCase()+role.slice(1)+' reset to default spots.', null);
+  renderAll();
+}
+function lockOffenseSet(){
+  state.phase='setup-def'; state.selectedPiece=null;
+  addLog(teamName(state.possession)+' locks in their offensive set.', 'offense');
+  setStatus(teamName(1-state.possession)+' defense — match up. Tap a defender, then an open tile. Start when ready.', null);
+  renderAll();
+}
+function startPossession(){
+  state.phase='offense'; startTurn();
+  addLog('— '+teamName(state.possession)+' possession begins. Clock at '+state.clock+'. —', 'system');
+  renderAll();
+}
 
 /* ============================================================
    TURN ENGINE (v4)
@@ -711,6 +767,12 @@ function endTurnEarly(){
 function onPieceClick(id){
   if(busy || state.gameOver) return;
   const p=getPiece(id); if(!p) return;
+  if(isSetup()){
+    if(p.role!==setupRole()){ setStatus('Set up your '+setupRole()+' — tap a '+setupRole()+' player.', 'error'); return; }
+    state.selectedPiece=(state.selectedPiece===id?null:id);
+    setStatus(state.selectedPiece?('Placing '+pieceLabel(p)+' — tap an open tile.'):'Deselected.', null);
+    return renderAll();
+  }
   if(state.mode==='pass'){
     if(p.role==='offense' && !isBallCarrier(p)) return attemptPass(p);
     if(isBallCarrier(p)){ state.mode=null; setStatus('Pass cancelled.', null); return renderAll(); }
@@ -733,6 +795,12 @@ function onPieceClick(id){
 }
 function onTileClick(col,row){
   if(busy || state.gameOver) return;
+  if(isSetup()){
+    const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
+    if(!sel){ setStatus('Select one of your players first, then tap a tile.', 'error'); return; }
+    if(tileOccupied(col,row)){ setStatus('That tile is taken — pick an open one.', 'error'); return; }
+    return setupMove(sel,col,row);
+  }
   if(state.mode==='screen'){
     const sel=getPiece(state.selectedPiece); if(!sel){ state.mode=null; return; }
     if(chebyshev(sel,{col,row})!==1){ setStatus('Screen must be set on an adjacent tile.', 'error'); return; }
@@ -904,8 +972,9 @@ function shotClockViolation(){
 }
 function flipPossession(){
   state.possession=1-state.possession; state.possessionCount++; state.clock=24;
-  state.pieces=freshPieces(); state.ballCarrier='o0'; state.phase='offense';
-  startTurn(); addLog('— '+teamName(state.possession)+' ball. Clock reset to 24. —', 'system'); renderAll();
+  state.pieces=freshPieces(); state.ballCarrier='o0';
+  addLog('— '+teamName(state.possession)+' ball. Clock reset to 24. Set your floor. —', 'system');
+  enterSetup(); renderAll();
 }
 function endGame(winner){
   state.gameOver=true;
@@ -918,7 +987,7 @@ function endGame(winner){
 function resetGame(){
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
-  busy=false; initState(); addLog('— New game. Team 1 ball. First to 21. —', 'system'); startTurn(); renderAll();
+  busy=false; initState(); addLog('— New game. Team 1 ball. First to 21. Set your floor. —', 'system'); enterSetup(); renderAll();
 }
 
 /* ============================================================
