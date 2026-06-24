@@ -61,8 +61,8 @@
 
   .court-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:14px; display:flex; flex-direction:column; align-items:center; gap:10px; }
-  /* v5: court is 600x620 (12 cols x 11 rows) — deeper perimeter */
-  .court-stage { position:relative; width:min(600px,100%); aspect-ratio:600/620; border-radius:10px;
+  /* v6: court is 600x564 (50ft x 47ft, 12 cols x 11 rows) */
+  .court-stage { position:relative; width:min(600px,100%); aspect-ratio:600/564; border-radius:10px;
     overflow:hidden; background-color:var(--wood);
     background-image:
       repeating-linear-gradient(91deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 11px),
@@ -240,29 +240,35 @@
   <div class="main">
     <div class="court-panel">
       <div id="courtStage" class="court-stage">
-        <!-- v5 SVG half court (viewBox 600x620). The bold white "three-point line"
-             is drawn to trace the EXACT tile boundary between 2pt and 3pt zones,
-             so a player can tell inside/outside the arc at a glance. -->
-        <svg class="court-svg" viewBox="0 0 600 620" preserveAspectRatio="none" aria-hidden="true">
+        <!-- v6 REALISTIC half court (viewBox 600x564 = 50ft x 47ft, hoop bottom-center).
+             Numbers match the geometry constants in JS so the drawn arc == the 2pt/3pt
+             zone boundary. -->
+        <svg class="court-svg" viewBox="0 0 600 564" preserveAspectRatio="none" aria-hidden="true">
           <g fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2">
-            <rect x="3" y="3" width="594" height="614" rx="2"/>
-            <!-- painted lane (cols 4-7, free-throw line down to baseline) -->
-            <rect x="200" y="169" width="200" height="451" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.45)"/>
-            <!-- free-throw circle at top of the key -->
-            <circle cx="300" cy="169" r="56"/>
-            <!-- backboard + rim -->
-            <line x1="268" y1="602" x2="332" y2="602" stroke-width="3"/>
-            <circle cx="300" cy="590" r="9" stroke="#E8A030"/>
-            <path d="M276,590 A24,24 0 0 1 324,590"/>
+            <rect x="2" y="2" width="596" height="560" rx="2"/>
+            <!-- half-court line circle (top edge) -->
+            <path d="M228,2 A72,72 0 0 1 372,2"/>
+            <!-- painted lane / key: 16ft wide, free-throw line to baseline -->
+            <rect x="204" y="336" width="192" height="228" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.5)"/>
+            <!-- free-throw circle = TOP OF THE KEY (solid top half, dashed bottom half) -->
+            <path d="M228,336 A72,72 0 0 1 372,336"/>
+            <path d="M228,336 A72,72 0 0 0 372,336" stroke-dasharray="7 7"/>
+            <!-- backboard + rim + restricted-area arc -->
+            <line x1="270" y1="513" x2="330" y2="513" stroke-width="3"/>
+            <circle cx="300" cy="501" r="9" stroke="#E8A030"/>
+            <path d="M252,501 A48,48 0 0 1 348,501"/>
           </g>
-          <!-- THE 3-POINT LINE: exact 2pt/3pt tile boundary (brighter, thicker) -->
-          <path d="M100,169 L500,169 L500,282 L400,282 L400,507 L450,507 L450,620 L150,620 L150,507 L200,507 L200,282 L100,282 Z"
-                fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5"/>
+          <!-- THE 3-POINT LINE: corner straight segments + curved arc (radius 285 about the hoop) -->
+          <g fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5">
+            <line x1="84" y1="564" x2="84" y2="315"/>
+            <line x1="516" y1="564" x2="516" y2="315"/>
+            <path d="M84,315 A285,285 0 0 1 516,315"/>
+          </g>
         </svg>
         <div id="tileGrid" class="tile-grid"></div>
-        <canvas id="trailCanvas" class="trail-canvas" width="600" height="620"></canvas>
+        <canvas id="trailCanvas" class="trail-canvas" width="600" height="564"></canvas>
         <div id="pieceLayer" class="piece-layer"></div>
-        <canvas id="fxCanvas" class="fx-canvas" width="600" height="620"></canvas>
+        <canvas id="fxCanvas" class="fx-canvas" width="600" height="564"></canvas>
       </div>
       <div id="zonePill" class="zone-pill"><span class="pill-muted">Select a piece to see its spot</span></div>
     </div>
@@ -275,6 +281,7 @@
         </div>
         <div id="actionButtons"></div>
         <div style="height:6px"></div>
+        <button id="undoBtn" class="btn end center" onclick="undoMove()">↶ Undo move</button>
         <button id="endTurnBtn" class="btn end center" onclick="endTurnEarly()">End Turn Early</button>
       </div>
 
@@ -379,28 +386,47 @@
 
 <script>
 /* ============================================================
-   BOARD GEOMETRY — v5: 12 columns x 11 rows
-   Row 0 = half court (far). Row 10 = baseline (hoop, bottom-center).
+   BOARD GEOMETRY — v6: realistic half court, 12 columns x 11 rows
+   Stage is 600x564 px = a real 50ft x 47ft half court (12 px/ft).
+   Hoop at bottom-center. Zones are derived GEOMETRICALLY from the real
+   court markings below, so the drawn 3-point arc IS the 2pt/3pt boundary.
+   The SAME numbers are hard-coded in the SVG markings (keep them in sync).
    ============================================================ */
-const COLS=12, ROWS=11, STAGE_W=600, STAGE_H=620;
-const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;   // 50 x 56.36
-const RIM={col:5.5,row:10};
+const COLS=12, ROWS=11, STAGE_W=600, STAGE_H=564;
+const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;   // 50 x 51.27
 
-// Zone key per tile (11 rows x 12 cols). Partitioned so the 3pt arc path in the
-// SVG above traces the exact boundary between 2pt (pt/dk/el) and 3pt (cl/cr/wl/wr/tok/hc) tiles.
-const ZONEMAP=[
-  ['hc','hc','hc','hc','hc','hc','hc','hc','hc','hc','hc','hc'], // 0
-  ['wl','wl','wl','wl','tok','tok','tok','tok','wr','wr','wr','wr'], // 1
-  ['wl','wl','wl','wl','tok','tok','tok','tok','wr','wr','wr','wr'], // 2
-  ['wl','wl','el','el','pt','pt','pt','pt','er','er','wr','wr'], // 3
-  ['wl','wl','el','el','pt','pt','pt','pt','er','er','wr','wr'], // 4
-  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 5
-  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 6
-  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 7
-  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 8
-  ['cl','cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr','cr'], // 9
-  ['cl','cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr','cr'], // 10
-];
+// --- court markings in px (12 px per foot) ---
+const HOOP={x:300,y:501};        // basket center (5'3" off baseline)
+const ARC_R=285;                 // 3-pt arc radius (23'9")
+const LANE_L=204, LANE_R=396;    // free-throw lane / paint, 16ft wide
+const FT_Y=336;                  // free-throw line (top of paint / top of key), 19ft off baseline
+const CORNER_X_L=84, CORNER_X_R=516; // corner-3 lines (widened from 3ft → 7ft so corner tiles are playable)
+const ARC_BREAK_Y=315;           // where the corner lines meet the arc
+const RIM={col:5.5,row:10};      // hoop tile (for "toward basket" moves)
+
+// Classify a tile into a zone purely from where its CENTER falls on the real court.
+// 2pt: pt, dkl, dkr, el, er.  3pt: cl, cr, wl, wr, tok, hc.
+function classifyZone(col,row){
+  const cx=(col+0.5)*TILE_W, cy=(row+0.5)*TILE_H;
+  const d=Math.hypot(cx-HOOP.x, cy-HOOP.y);
+  const inLaneX=cx>=LANE_L && cx<=LANE_R;
+  if(cy < TILE_H) return 'hc';                       // top row = backcourt bring-up (3pt desperation)
+  if(inLaneX && cy>=FT_Y) return 'pt';               // the painted lane
+  if(cy>=470 && !inLaneX){                            // low blocks just outside the lane = dunker spots
+    if(cx>=CORNER_X_L && cx<LANE_L) return 'dkl';
+    if(cx>LANE_R && cx<=CORNER_X_R) return 'dkr';
+  }
+  // Inside the 3-pt line? Below the arc break the boundary is the straight corner
+  // lines; above it, the curved arc. (This keeps corner-3 at the BASELINE corners.)
+  const inside = (cy>=ARC_BREAK_Y) ? (cx>=CORNER_X_L && cx<=CORNER_X_R) : (d<=ARC_R);
+  if(inside) return cx<HOOP.x?'el':'er';             // inside the line, outside paint = elbow / mid-range 2
+  if(cy>=ARC_BREAK_Y) return cx<HOOP.x?'cl':'cr';    // low & beyond the corner line = corner 3
+  if(cx>=LANE_L && cx<=LANE_R) return 'tok';         // upper-center, outside arc = top of key 3
+  return cx<HOOP.x?'wl':'wr';                          // upper-side, outside arc = wing 3
+}
+// Precomputed zone grid (built at boot) so zoneAt() is a cheap lookup.
+let ZONE_GRID=[];
+function buildZones(){ ZONE_GRID=[]; for(let r=0;r<ROWS;r++){ const row=[]; for(let c=0;c<COLS;c++) row.push(classifyZone(c,r)); ZONE_GRID.push(row); } }
 
 // ZONE_INFO — v5 ZONE-TO-POINTS MAP (adjust here during playtesting).
 // points: 2 = inside arc, 3 = outside arc. threshold: min single-die roll to make.
@@ -419,12 +445,12 @@ const ZONE_TINT={ pt:'rgba(232,80,80,0.12)', cl:'rgba(61,186,110,0.10)', cr:'rgb
   wl:'rgba(74,158,232,0.08)', wr:'rgba(74,158,232,0.08)', el:'rgba(232,160,48,0.08)', er:'rgba(232,160,48,0.08)',
   tok:'rgba(140,90,200,0.08)', dkl:'rgba(232,80,80,0.08)', dkr:'rgba(232,80,80,0.08)', hc:'rgba(100,100,120,0.06)' };
 
-// Named-spot labels on the 12x11 grid
-const NAMED_SPOTS={ '5,3':'nail','6,3':'nail','3,9':'dunker','8,9':'dunker','1,8':'short corner','10,8':'short corner','2,2':'slot','9,2':'slot' };
+// Named-spot labels — keyed "col,row", placed on the v6 geometry.
+let NAMED_SPOTS={ '5,6':'nail','6,6':'nail','2,9':'dunker','9,9':'dunker','1,9':'corner','10,9':'corner','1,2':'wing','10,2':'wing' };
 
-// Starting positions on the 12x11 grid
-const OFFENSE_START=[{col:6,row:0},{col:1,row:2},{col:5,row:1},{col:10,row:2},{col:8,row:4}];
-const DEFENSE_START=[{col:2,row:2},{col:5,row:2},{col:9,row:2},{col:4,row:4},{col:7,row:4}];
+// Starting positions (verified against the v6 geometry: ball up top, spread set)
+const OFFENSE_START=[{col:6,row:0},{col:1,row:3},{col:6,row:2},{col:10,row:3},{col:8,row:6}];
+const DEFENSE_START=[{col:2,row:3},{col:6,row:3},{col:9,row:3},{col:4,row:6},{col:7,row:6}];
 
 const FAST_OFFENSE=[0,3];  // O1, O4
 const FAST_DEFENSE=[0,3];  // D1, D4
@@ -439,6 +465,21 @@ const AP_PER_TURN=3;
    ============================================================ */
 let state;
 let busy=false;
+
+/* Undo: snapshot the whole state before each committed action. Scoped to the
+   current turn / setup sub-phase (the stack is cleared whenever control hands
+   over), so a player can only take back their own in-progress moves. */
+let undoStack=[];
+function pushUndo(){ undoStack.push(JSON.stringify(state)); if(undoStack.length>40) undoStack.shift(); }
+function clearUndo(){ undoStack=[]; }
+function undoMove(){
+  if(busy || state.gameOver) return;
+  if(!undoStack.length){ setStatus('Nothing to undo this turn.', 'error'); return; }
+  state=JSON.parse(undoStack.pop());
+  state.selectedPiece=null; state.mode=null;
+  setStatus('↶ Undid last move.', null);
+  renderAll();
+}
 
 function freshPieces(){
   const pieces=[];
@@ -458,7 +499,7 @@ function initState(){
    HELPERS
    ============================================================ */
 function inBounds(c,r){ return c>=0&&c<COLS&&r>=0&&r<ROWS; }
-function zoneAt(c,r){ return ZONEMAP[r][c]; }
+function zoneAt(c,r){ return ZONE_GRID[r][c]; }
 function chebyshev(a,b){ return Math.max(Math.abs(a.col-b.col),Math.abs(a.row-b.row)); }
 function tileCenterPx(c,r){ return {x:(c+0.5)*TILE_W, y:(r+0.5)*TILE_H}; }
 function getPiece(id){ return state.pieces.find(p=>p.id===id); }
@@ -687,6 +728,7 @@ function renderAll(){
   renderScoreboard(); renderPhaseBadge(); renderApDots(); renderActions();
   renderCoveragePanel(); renderZonePill(); renderLog();
   const etb=document.getElementById('endTurnBtn'); etb.disabled=busy; etb.style.display=isSetup()?'none':'block';
+  const ub=document.getElementById('undoBtn'); ub.disabled=busy||undoStack.length===0;
 }
 
 /* ============================================================
@@ -702,10 +744,11 @@ function addLog(text,type){ state.log.push({text,type:type||'system'}); if(state
    No clock or action-point cost during setup.
    ============================================================ */
 function enterSetup(){
-  state.phase='setup-off'; state.selectedPiece=null; state.mode=null;
+  state.phase='setup-off'; state.selectedPiece=null; state.mode=null; clearUndo();
   setStatus(teamName(state.possession)+' offense — arrange your half-court set. Tap a player, then an open tile. Lock in when ready.', null);
 }
 function setupMove(piece,col,row){
+  pushUndo();
   piece.col=col; piece.row=row; piece.trail=[{col,row}]; // trail baseline = the set position
   state.selectedPiece=null;
   setStatus(pieceLabel(piece)+' set in '+ZONE_INFO[zoneAt(col,row)].name+'. Place another, or lock in.', null);
@@ -720,7 +763,7 @@ function resetSetPositions(){
   renderAll();
 }
 function lockOffenseSet(){
-  state.phase='setup-def'; state.selectedPiece=null;
+  state.phase='setup-def'; state.selectedPiece=null; clearUndo();
   addLog(teamName(state.possession)+' locks in their offensive set.', 'offense');
   setStatus(teamName(1-state.possession)+' defense — match up. Tap a defender, then an open tile. Start when ready.', null);
   renderAll();
@@ -736,7 +779,7 @@ function startPossession(){
    ============================================================ */
 function startTurn(){
   state.actionPointsRemaining=AP_PER_TURN; state.actionsThisTurn=0;
-  state.canShootThisTurn=(state.phase==='offense'); state.selectedPiece=null; state.mode=null;
+  state.canShootThisTurn=(state.phase==='offense'); state.selectedPiece=null; state.mode=null; clearUndo();
   setStatus(state.phase==='offense'
     ? teamName(state.possession)+' on offense — 3 action points. Shoot now, or build your look.'
     : teamName(1-state.possession)+' on defense — 3 action points to respond.', null);
@@ -818,7 +861,9 @@ function onTileClick(col,row){
 }
 function moveTile(piece,col,row,burst){
   if(state.actionPointsRemaining<1) return;
-  if(burst){ if(!piece.fast||piece.stamina<=0) return; piece.stamina-=1; }
+  if(burst && (!piece.fast||piece.stamina<=0)) return;
+  pushUndo();
+  if(burst){ piece.stamina-=1; }
   const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name, toZone=ZONE_INFO[zoneAt(col,row)].name;
   piece.col=col; piece.row=row; piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
   const note=fromZone===toZone?toZone:(fromZone+' → '+toZone);
@@ -831,6 +876,7 @@ function directedMove(piece,cost){
   let sr=piece.row<RIM.row?1:piece.row>RIM.row?-1:0;
   let nc=piece.col+sc, nr=piece.row+sr;
   if(!inBounds(nc,nr)||(nc===piece.col&&nr===piece.row)){ setStatus(pieceLabel(piece)+' is already at the rim.', 'error'); return; }
+  pushUndo();
   const verb=piece.role==='offense'?' cuts toward basket: ':' sags toward paint: ';
   const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name, toZone=ZONE_INFO[zoneAt(nc,nr)].name;
   piece.col=nc; piece.row=nr; piece.trail.push({col:nc,row:nr}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
@@ -846,6 +892,7 @@ function enterPassMode(){
 }
 function attemptPass(receiver){
   const passer=getPiece(state.ballCarrier);
+  pushUndo();
   flashPassLine(passer,receiver);
   const defenders=state.pieces.filter(p=>p.role==='defense');
   let deflected=false, deflector=null;
@@ -869,15 +916,17 @@ function attemptPass(receiver){
 function enterScreenMode(){ if(state.actionPointsRemaining<2) return; state.mode='screen';
   setStatus('Screen — tap an adjacent tile to set the screen there (2 pts).', null); renderAll(); }
 function setScreen(piece,col,row){
+  pushUndo();
   const toZone=ZONE_INFO[zoneAt(col,row)].name;
   piece.col=col; piece.row=row; piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
   addLog(pieceLabel(piece)+' sets a screen at '+toZone+' (−2pts)', 'offense'); takeAction(2);
 }
 /* ---------- defense ---------- */
-function contestLane(d){ if(d.contesting) return; d.contesting=true; addLog(pieceLabel(d)+' contests the passing lane (−1pt)', 'defense'); takeAction(1); }
-function switchAssignment(d){ if(state.actionPointsRemaining<2) return; addLog(pieceLabel(d)+' switches assignment (−2pts)', 'defense'); takeAction(2); }
+function contestLane(d){ if(d.contesting) return; pushUndo(); d.contesting=true; addLog(pieceLabel(d)+' contests the passing lane (−1pt)', 'defense'); takeAction(1); }
+function switchAssignment(d){ if(state.actionPointsRemaining<2) return; pushUndo(); addLog(pieceLabel(d)+' switches assignment (−2pts)', 'defense'); takeAction(2); }
 function doubleTeam(d){
   if(state.actionPointsRemaining<3) return;
+  pushUndo();
   const carrier=getPiece(state.ballCarrier); let best=null, bestDist=Infinity;
   for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
     if(dc===0&&dr===0) continue; const nc=carrier.col+dc, nr=carrier.row+dr; if(!inBounds(nc,nr)) continue;
@@ -889,6 +938,7 @@ function doubleTeam(d){
 }
 function gambleSteal(d){
   if(state.actionPointsRemaining<3) return;
+  pushUndo();
   const carrier=getPiece(state.ballCarrier), dist=chebyshev(d,carrier);
   if(dist<=1){
     const roll=1+Math.floor(Math.random()*6);
@@ -1005,6 +1055,7 @@ function toggleRules(){ document.getElementById('rulesCard').classList.toggle('c
 /* ============================================================
    BOOT
    ============================================================ */
+buildZones();
 buildBoard();
 resetGame();
 </script>
