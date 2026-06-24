@@ -7,14 +7,15 @@
 <title>Five on the Floor</title>
 <style>
   /* ============================================================
-     FIVE ON THE FLOOR — v4
+     FIVE ON THE FLOOR — v5
      Single-file vanilla HTML/CSS/JS. No build tools, no frameworks.
 
-     v0  : named-zone board, dice shot resolution
-     v2  : 10x9 tile grid on an SVG basketball court, movement trails
-     v3  : ball-carrier system, passing + deflection + pass animation,
-           fast-piece 2-tile burst, stamina   (built here)
-     v4  : 3 action points per turn, shoot-first-only rule           (built here)
+     v0 : named-zone board, dice shot resolution
+     v2 : 10x9 tile grid on SVG court, movement trails
+     v3 : ball carrier, passing+deflection+animation, fast burst+stamina
+     v4 : 3 action points per turn, shoot-first-only rule
+     v5 : 3-point scoring by zone, paint/dunker +1 bonus die,
+          12x11 court with the 3pt arc aligned to the tile boundary   (this build)
      ============================================================ */
   :root {
     --bg:#0a0d12; --surface:#1a1d27; --surface2:#22263a;
@@ -31,7 +32,6 @@
   }
   .app { max-width:1180px; margin:0 auto; padding:10px; display:flex; flex-direction:column; gap:10px; min-height:100vh; }
 
-  /* Header */
   .header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px;
     background:var(--surface); border:1px solid var(--border); border-radius:12px; }
   .header h1 { font-size:18px; letter-spacing:0.5px; font-weight:800; text-transform:uppercase; }
@@ -41,7 +41,6 @@
   .phase-badge.offense { background:rgba(232,160,48,0.15); color:var(--offense); border-color:rgba(232,160,48,0.4); }
   .phase-badge.defense { background:rgba(74,158,232,0.15); color:var(--defense); border-color:rgba(74,158,232,0.4); }
 
-  /* Scoreboard */
   .scoreboard { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;
     padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
   .team-score { display:flex; flex-direction:column; align-items:center; gap:2px; }
@@ -58,13 +57,12 @@
   @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
   .possession-tag { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
 
-  /* Main */
   .main { display:grid; grid-template-columns:1fr 300px; gap:10px; align-items:start; }
 
-  /* Court */
   .court-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:14px; display:flex; flex-direction:column; align-items:center; gap:10px; }
-  .court-stage { position:relative; width:min(580px,100%); aspect-ratio:580/520; border-radius:10px;
+  /* v5: court is 600x620 (12 cols x 11 rows) — deeper perimeter */
+  .court-stage { position:relative; width:min(600px,100%); aspect-ratio:600/620; border-radius:10px;
     overflow:hidden; background-color:var(--wood);
     background-image:
       repeating-linear-gradient(91deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 11px),
@@ -76,45 +74,45 @@
   .fx-canvas { position:absolute; inset:0; width:100%; height:100%; z-index:6; pointer-events:none; }
   .piece-layer { position:absolute; inset:0; z-index:4; pointer-events:none; }
   .tile-grid { position:absolute; inset:0; z-index:2; display:grid;
-    grid-template-columns:repeat(10,1fr); grid-template-rows:repeat(9,1fr); }
-  .tile { position:relative; border:1px solid rgba(255,255,255,0.07); cursor:pointer; transition:background .1s ease, box-shadow .1s ease; }
+    grid-template-columns:repeat(12,1fr); grid-template-rows:repeat(11,1fr); }
+  .tile { position:relative; border:1px solid rgba(255,255,255,0.06); cursor:pointer; transition:background .1s ease, box-shadow .1s ease; }
   .tile:hover { background:rgba(255,255,255,0.08) !important; }
   .tile.legal { box-shadow:inset 0 0 0 2px rgba(255,255,255,0.5); background:rgba(255,255,255,0.10) !important; }
   .tile.legal-burst { box-shadow:inset 0 0 0 2px rgba(232,160,48,0.6); background:rgba(232,160,48,0.10) !important; }
-  .tile.pass-target { box-shadow:inset 0 0 0 2px rgba(255,255,255,0.8); }
+  /* v5: faint marker so 3pt tiles read distinctly from 2pt tiles */
+  .tile.three::after { content:""; position:absolute; top:3px; right:3px; width:5px; height:5px; border-radius:50%; background:rgba(232,160,48,0.5); }
   .tile-label { position:absolute; bottom:2px; left:0; right:0; text-align:center; font-size:8px;
     color:rgba(255,255,255,0.28); text-transform:uppercase; letter-spacing:0.5px; pointer-events:none; line-height:1; white-space:nowrap; }
 
-  /* Pieces */
-  .piece { position:absolute; width:6.6%; aspect-ratio:1; border-radius:50%; transform:translate(-50%,-50%);
-    display:flex; align-items:center; justify-content:center; font-size:clamp(9px,1.7vw,13px); font-weight:800;
+  .piece { position:absolute; width:6%; aspect-ratio:1; border-radius:50%; transform:translate(-50%,-50%);
+    display:flex; align-items:center; justify-content:center; font-size:clamp(8px,1.5vw,12px); font-weight:800;
     color:#0f1117; border:2px solid rgba(0,0,0,0.25); cursor:pointer; pointer-events:auto;
     transition:transform .1s ease, box-shadow .1s ease; box-shadow:0 2px 5px rgba(0,0,0,0.4); user-select:none; }
   .piece.offense { background:var(--offense); }
   .piece.defense { background:var(--defense); }
-  .piece.selected { box-shadow:0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,0.5); transform:translate(-50%,-50%) scale(1.15); z-index:5; }
+  .piece.selected { box-shadow:0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,0.5); transform:translate(-50%,-50%) scale(1.18); z-index:5; }
   .piece.dim { opacity:0.42; }
   .piece.pass-cand { box-shadow:0 0 0 3px rgba(255,255,255,0.85), 0 0 10px 2px rgba(255,255,255,0.5); cursor:pointer; }
   .piece.has-ball { border-color:#fff; }
-  .piece .ball-dot { position:absolute; top:-5px; right:-5px; width:46%; height:46%; border-radius:50%;
+  .piece .ball-dot { position:absolute; top:-5px; right:-5px; width:48%; height:48%; border-radius:50%;
     background:var(--ball); border:1.5px solid #2a1408; box-shadow:0 0 6px rgba(232,115,42,0.8); }
-  .piece .fast-bolt { position:absolute; bottom:-7px; left:50%; transform:translateX(-50%); font-size:8px; color:#fff;
+  .piece .fast-bolt { position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); font-size:8px; color:#fff;
     text-shadow:0 0 3px #000; white-space:nowrap; pointer-events:none; }
 
-  /* Zone pill */
   .zone-pill { display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px;
     background:var(--surface2); border:1px solid var(--border-br); font-size:13px; font-weight:700; min-height:34px; flex-wrap:wrap; justify-content:center; }
+  .zone-pill.three { border-color:rgba(232,160,48,0.55); background:rgba(232,160,48,0.12); }
   .zone-pill .pill-zone { color:var(--gold); }
   .zone-pill .pill-sep { color:var(--muted); font-weight:400; }
   .zone-pill .pill-muted { color:var(--muted); font-weight:600; }
   .zone-pill .pill-ball { color:var(--ball); }
+  .zone-pill .pts3 { color:var(--offense); }
+  .zone-pill .pts2 { color:#cfcbc2; }
 
-  /* Sidebar */
   .sidebar { display:flex; flex-direction:column; gap:10px; }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; }
   .card h2 { font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); margin-bottom:8px; font-weight:700; }
 
-  /* Action points display */
   .ap-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
   .ap-dots { display:flex; gap:5px; align-items:center; }
   .ap-dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--border-br); background:transparent; transition:transform .1s ease; }
@@ -155,6 +153,7 @@
   .log-entry.offense { background:rgba(138,135,153,0.08); border-color:var(--muted); color:var(--text); }
   .log-entry.defense { background:rgba(74,158,232,0.10); border-color:var(--defense); }
   .log-entry.make { background:rgba(61,186,110,0.13); border-color:var(--make); font-weight:700; }
+  .log-entry.make3 { background:rgba(232,160,48,0.16); border-color:var(--offense); font-weight:700; }
   .log-entry.miss { background:rgba(232,80,80,0.12); border-color:var(--miss); }
   .log-entry.system { background:rgba(232,160,48,0.12); border-color:var(--offense); }
   .log-entry.steal { background:rgba(232,115,42,0.16); border-color:var(--ball); font-weight:700; }
@@ -172,40 +171,40 @@
   .rules-body th, .rules-body td { text-align:left; padding:3px 5px; border-bottom:1px solid var(--border); }
   .rules-body th { color:var(--muted); font-weight:700; }
   .rules-body .swatch { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  .rules-body .g3 { color:var(--offense); font-weight:700; }
 
   .status-bar { padding:12px 16px; background:var(--surface2); border:1px solid var(--border-br); border-radius:12px;
     font-size:14px; font-weight:600; text-align:center; min-height:46px; display:flex; align-items:center; justify-content:center; }
   .status-bar.error { background:rgba(232,80,80,0.15); border-color:var(--miss); color:#ffb3b3; }
   .status-bar.good { background:rgba(61,186,110,0.13); border-color:var(--make); color:#b6f0cf; }
 
-  /* Dice overlay */
   .overlay { position:fixed; inset:0; background:rgba(8,9,14,0.82); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; backdrop-filter:blur(3px); }
   .overlay.show { display:flex; animation:fade .2s ease; }
   @keyframes fade { from{opacity:0;} to{opacity:1;} }
-  .dice-modal { background:var(--surface); border:1px solid var(--border-br); border-radius:16px; padding:24px; max-width:380px; width:100%; text-align:center; animation:pop .25s cubic-bezier(.2,1.2,.4,1); }
+  .dice-modal { background:var(--surface); border:1px solid var(--border-br); border-radius:16px; padding:24px; max-width:390px; width:100%; text-align:center; animation:pop .25s cubic-bezier(.2,1.2,.4,1); }
   @keyframes pop { from{transform:scale(0.85); opacity:0;} to{transform:scale(1); opacity:1;} }
+  .shot-headline { font-size:13px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); font-weight:800; margin-bottom:6px; }
   .dice-modal .shot-zone { font-size:14px; color:var(--muted); }
   .dice-modal .shot-zone b { color:var(--text); }
   .dice-modal .shot-coverage { font-size:13px; margin-top:4px; color:var(--gold); font-weight:700; }
-  .dice-tray { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:20px 0; }
-  .die { width:54px; height:54px; border-radius:12px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; border:2px solid var(--border); animation:roll .4s ease; }
+  .dice-modal .shot-bonus { font-size:12px; margin-top:4px; color:var(--offense); font-weight:700; min-height:0; }
+  .dice-tray { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:18px 0; }
+  .die { width:52px; height:52px; border-radius:12px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:25px; font-weight:800; border:2px solid var(--border); animation:roll .4s ease; }
   @keyframes roll { 0%{transform:rotate(-25deg) scale(0.5); opacity:0;} 100%{transform:rotate(0) scale(1); opacity:1;} }
   .die.hit { background:rgba(61,186,110,0.2); border-color:var(--make); color:var(--make); }
   .die.cold { background:rgba(232,80,80,0.15); border-color:var(--miss); color:#ff9090; }
-  .outcome { font-size:34px; font-weight:900; letter-spacing:1px; margin:6px 0; }
-  .outcome.make { color:var(--make); } .outcome.miss { color:var(--miss); }
+  .outcome { font-size:38px; font-weight:900; letter-spacing:1px; margin:6px 0; }
+  .outcome.pts3 { color:var(--offense); } .outcome.pts2 { color:var(--make); } .outcome.miss { color:var(--miss); }
   .outcome-detail { font-size:13px; color:var(--muted); margin-bottom:18px; line-height:1.5; }
 
-  /* Game over */
   .gameover { position:fixed; inset:0; background:rgba(8,9,14,0.92); display:none; align-items:center; justify-content:center; z-index:60; padding:20px; }
   .gameover.show { display:flex; }
   .gameover-modal { text-align:center; max-width:380px; }
   .gameover-modal .go-title { font-size:16px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; }
   .gameover-modal .go-winner { font-size:40px; font-weight:900; margin:10px 0; color:var(--gold); }
   .gameover-modal .go-score { font-size:22px; font-weight:700; margin-bottom:24px; font-variant-numeric:tabular-nums; }
-  .btn.shoot.center { justify-content:center; }
 
-  @media (max-width:800px) {
+  @media (max-width:820px) {
     .main { grid-template-columns:1fr; }
     .sidebar { order:2; } .court-panel { order:1; }
     .score-num { font-size:34px; } .clock { font-size:38px; } .app { padding:8px; }
@@ -239,23 +238,29 @@
   <div class="main">
     <div class="court-panel">
       <div id="courtStage" class="court-stage">
-        <svg class="court-svg" viewBox="0 0 580 520" preserveAspectRatio="none" aria-hidden="true">
+        <!-- v5 SVG half court (viewBox 600x620). The bold white "three-point line"
+             is drawn to trace the EXACT tile boundary between 2pt and 3pt zones,
+             so a player can tell inside/outside the arc at a glance. -->
+        <svg class="court-svg" viewBox="0 0 600 620" preserveAspectRatio="none" aria-hidden="true">
           <g fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2">
-            <rect x="3" y="3" width="574" height="514" rx="2"/>
-            <rect x="174" y="231" width="232" height="289" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.5)"/>
-            <circle cx="290" cy="231" r="58"/>
-            <path d="M30,520 L30,300"/>
-            <path d="M550,520 L550,300"/>
-            <path d="M30,300 A311,311 0 0 1 550,300"/>
-            <line x1="262" y1="500" x2="318" y2="500" stroke-width="3"/>
-            <circle cx="290" cy="489" r="8" stroke="#E8A030"/>
-            <path d="M266,489 A24,24 0 0 1 314,489"/>
+            <rect x="3" y="3" width="594" height="614" rx="2"/>
+            <!-- painted lane (cols 4-7, free-throw line down to baseline) -->
+            <rect x="200" y="169" width="200" height="451" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.45)"/>
+            <!-- free-throw circle at top of the key -->
+            <circle cx="300" cy="169" r="56"/>
+            <!-- backboard + rim -->
+            <line x1="268" y1="602" x2="332" y2="602" stroke-width="3"/>
+            <circle cx="300" cy="590" r="9" stroke="#E8A030"/>
+            <path d="M276,590 A24,24 0 0 1 324,590"/>
           </g>
+          <!-- THE 3-POINT LINE: exact 2pt/3pt tile boundary (brighter, thicker) -->
+          <path d="M100,169 L500,169 L500,282 L400,282 L400,507 L450,507 L450,620 L150,620 L150,507 L200,507 L200,282 L100,282 Z"
+                fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5"/>
         </svg>
         <div id="tileGrid" class="tile-grid"></div>
-        <canvas id="trailCanvas" class="trail-canvas" width="580" height="520"></canvas>
+        <canvas id="trailCanvas" class="trail-canvas" width="600" height="620"></canvas>
         <div id="pieceLayer" class="piece-layer"></div>
-        <canvas id="fxCanvas" class="fx-canvas" width="580" height="520"></canvas>
+        <canvas id="fxCanvas" class="fx-canvas" width="600" height="620"></canvas>
       </div>
       <div id="zonePill" class="zone-pill"><span class="pill-muted">Select a piece to see its spot</span></div>
     </div>
@@ -298,59 +303,48 @@
         </div>
         <div class="rules-body">
           <h3>The Goal</h3>
-          First team to <b>21</b> wins. Build a good look, then cash the shot.
+          First team to <b>21</b> wins. <span class="g3">Threes get you there faster</span> — 7 corner threes wins; a paint-only team needs 11 makes.
 
           <h3>Turn Structure</h3>
-          Each team gets <b>3 action points</b> per turn, spent across any of your 5 players however you like.
-          Offense acts → Defense reacts → repeat. <b>Unused points are lost</b> — they don't carry over.
+          Each team gets <b>3 action points</b> per turn, spent across any of your 5 players.
+          Offense acts → Defense reacts → repeat. <b>Unused points are lost.</b>
 
           <h3>The Shoot Rule</h3>
-          You can <b>only shoot as the very first action of your turn</b>. Once you move, pass, or do anything
-          else, you can't shoot until next turn. Use one turn to build the look; start the next turn with the shot.
+          You can <b>only shoot as the very first action of your turn</b>. Build the look one turn; cash the shot the next.
 
           <h3>The Ball</h3>
-          One offense piece is the <b>ball carrier</b> (orange dot). Only the ball carrier can shoot or pass.
-          <b>Pass</b> moves the ball to a teammate — but defenders in the lane can <b>deflect</b> it for a steal.
+          One offense piece is the <b>ball carrier</b> (orange dot). Only the ball carrier shoots or passes.
+          <b>Pass</b> moves the ball — defenders in the lane can <b>deflect</b> for a steal.
 
           <h3>Fast Pieces ⚡ + Stamina</h3>
-          Pieces marked ⚡ can <b>burst 2 tiles</b> in one action (gold-highlighted tiles) at the cost of 1 stamina.
-          Stamina refills each possession.
+          ⚡ pieces can <b>burst 2 tiles</b> (gold tiles) for 1 stamina. Stamina refills each possession.
 
-          <h3>Action Costs</h3>
+          <h3>Zone Values &amp; Difficulty</h3>
+          <!-- v5 ZONE → POINTS map (search "ZONE_INFO" in JS to adjust) -->
           <table>
-            <tr><th>Offense</th><th></th></tr>
-            <tr><td>Move / Drive / Cut / Space 1 tile</td><td>1 pt</td></tr>
-            <tr><td>Pass</td><td>1 pt</td></tr>
-            <tr><td>Screen</td><td>2 pts</td></tr>
-            <tr><td>⚡ 2-tile burst</td><td>1 pt + 1 stam</td></tr>
-            <tr><td>Shoot</td><td>FREE (first only)</td></tr>
-            <tr><th>Defense</th><th></th></tr>
-            <tr><td>Move / Sag / Contest lane 1 tile</td><td>1 pt</td></tr>
-            <tr><td>Switch assignment</td><td>2 pts</td></tr>
-            <tr><td>Double team / Gamble steal</td><td>3 pts (full turn)</td></tr>
+            <tr><th>Zone</th><th>Points</th><th>Need</th><th>Paint Bonus</th></tr>
+            <tr><td>Paint</td><td>2</td><td>4+</td><td class="g3">+1 die</td></tr>
+            <tr><td>Dunker Spot</td><td>2</td><td>5+</td><td class="g3">+1 die</td></tr>
+            <tr><td>Elbow L/R</td><td>2</td><td>5+</td><td>—</td></tr>
+            <tr><td><span class="g3">Corner L/R</span></td><td class="g3">3</td><td>4+</td><td>—</td></tr>
+            <tr><td><span class="g3">Wing L/R</span></td><td class="g3">3</td><td>5+</td><td>—</td></tr>
+            <tr><td><span class="g3">Top of Key</span></td><td class="g3">3</td><td>6</td><td>—</td></tr>
+            <tr><td><span class="g3">Half Court</span></td><td class="g3">3</td><td>6</td><td>—</td></tr>
           </table>
+          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">The gold line on the court is the 3-point line — outside it scores 3.</div>
 
           <h3>Shot Quality → Dice</h3>
-          Coverage is the tile (king) distance to the nearest defender when you shoot:
+          Dice = coverage (tile distance to nearest defender) <b>plus</b> the paint bonus, capped at 4:
           <table>
-            <tr><th>Coverage</th><th>Dice</th></tr>
-            <tr><td>Wide open (3+ tiles)</td><td>3</td></tr>
-            <tr><td>Open (2 tiles)</td><td>2</td></tr>
-            <tr><td>Contested (0–1 tiles)</td><td>1</td></tr>
+            <tr><th>Coverage</th><th>Base</th><th>Paint Total</th></tr>
+            <tr><td>Wide Open (3+ tiles)</td><td>3</td><td class="g3">4</td></tr>
+            <tr><td>Open (2 tiles)</td><td>2</td><td class="g3">3</td></tr>
+            <tr><td>Contested (0–1 tiles)</td><td>1</td><td class="g3">2</td></tr>
           </table>
-          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Clock ≤ 6 → −1 die (pressure), min 1.</div>
-
-          <h3>Zone Thresholds</h3>
-          <table>
-            <tr><th>Zone</th><th>Need</th></tr>
-            <tr><td><span class="swatch" style="background:#3dba6e"></span>Paint / Corners</td><td>4+</td></tr>
-            <tr><td><span class="swatch" style="background:#4A9EE8"></span>Wings / Elbows / Dunker</td><td>5+</td></tr>
-            <tr><td><span class="swatch" style="background:#8c5ac8"></span>Top of Key</td><td>6</td></tr>
-            <tr><td><span class="swatch" style="background:#6b6b78"></span>Half Court</td><td>6</td></tr>
-          </table>
+          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Only Paint &amp; Dunker get the +1 at-rim bonus. Clock ≤ 6 → −1 die (min 1).</div>
 
           <h3>Shot Clock</h3>
-          24 clicks, shared. Every action point spent = 1 click. 0 = violation, ball turns over.
+          24 clicks, shared. Every action point = 1 click. 0 = violation, ball turns over.
         </div>
       </div>
     </div>
@@ -361,8 +355,10 @@
 
 <div id="overlay" class="overlay">
   <div class="dice-modal">
+    <div class="shot-headline" id="shotHeadline"></div>
     <div class="shot-zone" id="shotZone"></div>
     <div class="shot-coverage" id="shotCoverage"></div>
+    <div class="shot-bonus" id="shotBonus"></div>
     <div class="dice-tray" id="diceTray"></div>
     <div class="outcome" id="outcome"></div>
     <div class="outcome-detail" id="outcomeDetail"></div>
@@ -381,39 +377,53 @@
 
 <script>
 /* ============================================================
-   BOARD GEOMETRY (unchanged from v2)
+   BOARD GEOMETRY — v5: 12 columns x 11 rows
+   Row 0 = half court (far). Row 10 = baseline (hoop, bottom-center).
    ============================================================ */
-const COLS=10, ROWS=9, STAGE_W=580, STAGE_H=520;
-const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;
-const RIM={col:4.5,row:8}; // basket at bottom-center, used for "toward basket" actions
+const COLS=12, ROWS=11, STAGE_W=600, STAGE_H=620;
+const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;   // 50 x 56.36
+const RIM={col:5.5,row:10};
 
+// Zone key per tile (11 rows x 12 cols). Partitioned so the 3pt arc path in the
+// SVG above traces the exact boundary between 2pt (pt/dk/el) and 3pt (cl/cr/wl/wr/tok/hc) tiles.
 const ZONEMAP=[
-  ['hc','hc','hc','hc','hc','hc','hc','hc','hc','hc'],
-  ['hc','hc','hc','hc','tok','tok','hc','hc','hc','hc'],
-  ['wl','wl','el','el','tok','tok','er','er','wr','wr'],
-  ['wl','wl','el','el','tok','tok','er','er','wr','wr'],
-  ['wl','wl','el','pt','pt','pt','pt','er','wr','wr'],
-  ['cl','cl','wl','pt','pt','pt','pt','wr','cr','cr'],
-  ['cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr'],
-  ['cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr'],
-  ['cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr'],
+  ['hc','hc','hc','hc','hc','hc','hc','hc','hc','hc','hc','hc'], // 0
+  ['wl','wl','wl','wl','tok','tok','tok','tok','wr','wr','wr','wr'], // 1
+  ['wl','wl','wl','wl','tok','tok','tok','tok','wr','wr','wr','wr'], // 2
+  ['wl','wl','el','el','pt','pt','pt','pt','er','er','wr','wr'], // 3
+  ['wl','wl','el','el','pt','pt','pt','pt','er','er','wr','wr'], // 4
+  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 5
+  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 6
+  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 7
+  ['cl','cl','cl','cl','pt','pt','pt','pt','cr','cr','cr','cr'], // 8
+  ['cl','cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr','cr'], // 9
+  ['cl','cl','cl','dkl','pt','pt','pt','pt','dkr','cr','cr','cr'], // 10
 ];
+
+// ZONE_INFO — v5 ZONE-TO-POINTS MAP (adjust here during playtesting).
+// points: 2 = inside arc, 3 = outside arc. threshold: min single-die roll to make.
 const ZONE_INFO={
-  hc:{name:'Half Court',threshold:6}, tok:{name:'Top of Key',threshold:6},
-  wl:{name:'Wing Left',threshold:5}, wr:{name:'Wing Right',threshold:5},
-  el:{name:'Elbow Left',threshold:5}, er:{name:'Elbow Right',threshold:5},
-  dkl:{name:'Dunker Left',threshold:5}, dkr:{name:'Dunker Right',threshold:5},
-  pt:{name:'Paint',threshold:4}, cl:{name:'Corner Left',threshold:4}, cr:{name:'Corner Right',threshold:4},
+  hc:{name:'Half Court',threshold:6,points:3},  tok:{name:'Top of Key',threshold:6,points:3},
+  wl:{name:'Wing Left',threshold:5,points:3},   wr:{name:'Wing Right',threshold:5,points:3},
+  cl:{name:'Corner Left',threshold:4,points:3}, cr:{name:'Corner Right',threshold:4,points:3},
+  el:{name:'Elbow Left',threshold:5,points:2},  er:{name:'Elbow Right',threshold:5,points:2},
+  pt:{name:'Paint',threshold:4,points:2},
+  dkl:{name:'Dunker Left',threshold:5,points:2}, dkr:{name:'Dunker Right',threshold:5,points:2},
 };
+// Paint bonus (+1 at-rim die) applies ONLY to these zones (not elbow).
+const PAINT_BONUS_ZONES=['pt','dkl','dkr'];
+
 const ZONE_TINT={ pt:'rgba(232,80,80,0.12)', cl:'rgba(61,186,110,0.10)', cr:'rgba(61,186,110,0.10)',
   wl:'rgba(74,158,232,0.08)', wr:'rgba(74,158,232,0.08)', el:'rgba(232,160,48,0.08)', er:'rgba(232,160,48,0.08)',
   tok:'rgba(140,90,200,0.08)', dkl:'rgba(232,80,80,0.08)', dkr:'rgba(232,80,80,0.08)', hc:'rgba(100,100,120,0.06)' };
-const NAMED_SPOTS={ '4,4':'nail','5,4':'nail','2,7':'dunker','7,7':'dunker','1,6':'short corner','8,6':'short corner','2,3':'slot','7,3':'slot' };
 
-const OFFENSE_START=[{col:5,row:0},{col:1,row:3},{col:4,row:2},{col:8,row:3},{col:7,row:5}];
-const DEFENSE_START=[{col:1,row:3},{col:4,row:2},{col:8,row:3},{col:3,row:4},{col:6,row:4}];
+// Named-spot labels on the 12x11 grid
+const NAMED_SPOTS={ '5,3':'nail','6,3':'nail','3,9':'dunker','8,9':'dunker','1,8':'short corner','10,8':'short corner','2,2':'slot','9,2':'slot' };
 
-// v3: which piece indices are "fast" (⚡, can 2-tile burst, have stamina).
+// Starting positions on the 12x11 grid
+const OFFENSE_START=[{col:6,row:0},{col:1,row:2},{col:5,row:1},{col:10,row:2},{col:8,row:4}];
+const DEFENSE_START=[{col:2,row:2},{col:5,row:2},{col:9,row:2},{col:4,row:4},{col:7,row:4}];
+
 const FAST_OFFENSE=[0,3];  // O1, O4
 const FAST_DEFENSE=[0,3];  // D1, D4
 const START_STAMINA=3;
@@ -426,32 +436,20 @@ const AP_PER_TURN=3;
    STATE
    ============================================================ */
 let state;
-let busy=false; // input lock during end-of-turn flash / animations
+let busy=false;
 
 function freshPieces(){
   const pieces=[];
-  OFFENSE_START.forEach((s,i)=>{
-    const fast=FAST_OFFENSE.includes(i);
-    pieces.push({id:'o'+i, role:'offense', col:s.col, row:s.row, trail:[{col:s.col,row:s.row}], fast, stamina:fast?START_STAMINA:0});
-  });
-  DEFENSE_START.forEach((s,i)=>{
-    const fast=FAST_DEFENSE.includes(i);
-    pieces.push({id:'d'+i, role:'defense', col:s.col, row:s.row, trail:[{col:s.col,row:s.row}], fast, stamina:fast?START_STAMINA:0, contesting:false});
-  });
+  OFFENSE_START.forEach((s,i)=>{ const fast=FAST_OFFENSE.includes(i);
+    pieces.push({id:'o'+i,role:'offense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0}); });
+  DEFENSE_START.forEach((s,i)=>{ const fast=FAST_DEFENSE.includes(i);
+    pieces.push({id:'d'+i,role:'defense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,contesting:false}); });
   return pieces;
 }
-
 function initState(){
-  state={
-    scores:[0,0], possession:0, possessionCount:1, clock:24, coverage:'man',
+  state={ scores:[0,0], possession:0, possessionCount:1, clock:24, coverage:'man',
     pieces:freshPieces(), selectedPiece:null, phase:'offense', gameOver:false, log:[],
-    // v3
-    ballCarrier:'o0',
-    // v4
-    actionPointsRemaining:AP_PER_TURN, actionsThisTurn:0, canShootThisTurn:true,
-    // interaction modes
-    mode:null, // null | 'pass' | 'screen'
-  };
+    ballCarrier:'o0', actionPointsRemaining:AP_PER_TURN, actionsThisTurn:0, canShootThisTurn:true, mode:null };
 }
 
 /* ============================================================
@@ -465,7 +463,8 @@ function getPiece(id){ return state.pieces.find(p=>p.id===id); }
 function pieceLabel(p){ return (p.role==='offense'?'O':'D')+(parseInt(p.id.slice(1))+1); }
 function teamName(t){ return 'Team '+(t+1); }
 function isBallCarrier(p){ return p && p.id===state.ballCarrier; }
-function tileOccupied(col,row){ return state.pieces.some(p=>p.col===col&&p.row===row); }
+function isThreeZone(zoneKey){ return ZONE_INFO[zoneKey].points===3; }
+function paintBonusFor(zoneKey){ return PAINT_BONUS_ZONES.includes(zoneKey)?1:0; }
 
 function coverageFor(col,row){
   const defenders=state.pieces.filter(p=>p.role==='defense');
@@ -476,15 +475,31 @@ function coverageFor(col,row){
   return {label:'Wide Open',dice:3};
 }
 
-// point-to-segment distance in tile space (for pass-lane deflection)
+// v5: full shot math at a tile — coverage dice + paint bonus (cap 4) + clock pressure.
+function computeShot(col,row){
+  const zoneKey=zoneAt(col,row);
+  const info=ZONE_INFO[zoneKey];
+  const cov=coverageFor(col,row);
+  const bonus=paintBonusFor(zoneKey);
+  let dice=Math.min(4, cov.dice+bonus);   // cap total at 4 (wide-open paint = 3+1)
+  let pressure=false;
+  if(state.clock<=6){ dice=Math.max(1,dice-1); pressure=true; }
+  return { zoneKey, name:info.name, points:info.points, threshold:info.threshold,
+           coverage:cov.label, baseDice:cov.dice, bonus, dice, pressure };
+}
+
 function pointSegDist(p,a,b){
-  const vx=b.col-a.col, vy=b.row-a.row;
-  const wx=p.col-a.col, wy=p.row-a.row;
-  const len2=vx*vx+vy*vy;
-  let t = len2===0?0:(wx*vx+wy*vy)/len2;
-  t=Math.max(0,Math.min(1,t));
-  const px=a.col+t*vx, py=a.row+t*vy;
-  return Math.hypot(p.col-px, p.row-py);
+  const vx=b.col-a.col, vy=b.row-a.row, wx=p.col-a.col, wy=p.row-a.row;
+  const len2=vx*vx+vy*vy; let t=len2===0?0:(wx*vx+wy*vy)/len2; t=Math.max(0,Math.min(1,t));
+  const px=a.col+t*vx, py=a.row+t*vy; return Math.hypot(p.col-px,p.row-py);
+}
+function shotHeadline(zoneKey){
+  switch(zoneKey){
+    case 'pt': return 'PAINT LAYUP'; case 'dkl': case 'dkr': return 'DUNKER FINISH';
+    case 'cl': case 'cr': return 'CORNER THREE'; case 'wl': case 'wr': return 'WING THREE';
+    case 'tok': return 'TOP-OF-KEY THREE'; case 'el': case 'er': return 'ELBOW JUMPER';
+    case 'hc': return 'HALF-COURT HEAVE'; default: return 'JUMP SHOT';
+  }
 }
 
 /* ============================================================
@@ -497,8 +512,10 @@ function buildBoard(){
     for(let col=0; col<COLS; col++){
       const tile=document.createElement('div');
       tile.className='tile';
+      const zk=zoneAt(col,row);
+      if(isThreeZone(zk)) tile.classList.add('three'); // faint 3pt marker
       tile.dataset.col=col; tile.dataset.row=row;
-      tile.style.background=ZONE_TINT[zoneAt(col,row)]||'transparent';
+      tile.style.background=ZONE_TINT[zk]||'transparent';
       const label=NAMED_SPOTS[col+','+row];
       if(label){ const l=document.createElement('div'); l.className='tile-label'; l.textContent=label; tile.appendChild(l); }
       tile.addEventListener('click',()=>onTileClick(col,row));
@@ -513,14 +530,12 @@ function buildBoard(){
 function renderPieces(){
   const layer=document.getElementById('pieceLayer');
   layer.innerHTML='';
-  const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
   state.pieces.forEach(p=>{
     const el=document.createElement('div');
     el.className='piece '+p.role;
     if(p.id===state.selectedPiece) el.classList.add('selected');
     if(p.role!==state.phase) el.classList.add('dim');
     if(isBallCarrier(p)) el.classList.add('has-ball');
-    // pass candidate highlight: in pass mode, offense teammates (not carrier) are tap targets
     if(state.mode==='pass' && p.role==='offense' && !isBallCarrier(p)) el.classList.add('pass-cand');
     el.style.left=((p.col+0.5)/COLS*100)+'%';
     el.style.top=((p.row+0.5)/ROWS*100)+'%';
@@ -531,44 +546,34 @@ function renderPieces(){
     layer.appendChild(el);
   });
 }
-
 function renderLegal(){
   document.querySelectorAll('.tile.legal,.tile.legal-burst').forEach(t=>t.classList.remove('legal','legal-burst'));
-  if(state.mode==='pass') return; // in pass mode, tiles aren't move targets
+  if(state.mode==='pass') return;
   if(!state.selectedPiece) return;
   const sel=getPiece(state.selectedPiece);
-  if(!sel || sel.role!==state.phase) return;
-  if(state.actionPointsRemaining<=0) return;
+  if(!sel || sel.role!==state.phase || state.actionPointsRemaining<=0) return;
   const canBurst=sel.fast && sel.stamina>0;
   document.querySelectorAll('.tile').forEach(t=>{
-    const c=+t.dataset.col, r=+t.dataset.row;
-    const d=chebyshev(sel,{col:c,row:r});
-    if(d===1) t.classList.add('legal');
-    else if(d===2 && canBurst) t.classList.add('legal-burst');
+    const c=+t.dataset.col, r=+t.dataset.row, d=chebyshev(sel,{col:c,row:r});
+    if(d===1) t.classList.add('legal'); else if(d===2 && canBurst) t.classList.add('legal-burst');
   });
 }
-
 function drawTrails(){
   const ctx=document.getElementById('trailCanvas').getContext('2d');
   ctx.clearRect(0,0,STAGE_W,STAGE_H);
   state.pieces.forEach(p=>{
-    const pts=p.trail.slice(-MAX_TRAIL);
-    if(pts.length<2) return;
+    const pts=p.trail.slice(-MAX_TRAIL); if(pts.length<2) return;
     const color=p.role==='offense'?'rgba(232,160,48,0.45)':'rgba(74,158,232,0.35)';
     ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=1.8; ctx.setLineDash([2,6]);
-    ctx.beginPath();
-    pts.forEach((pt,i)=>{ const c=tileCenterPx(pt.col,pt.row); if(i===0)ctx.moveTo(c.x,c.y); else ctx.lineTo(c.x,c.y); });
-    ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); pts.forEach((pt,i)=>{ const c=tileCenterPx(pt.col,pt.row); if(i===0)ctx.moveTo(c.x,c.y); else ctx.lineTo(c.x,c.y); }); ctx.stroke(); ctx.setLineDash([]);
     pts.forEach(pt=>{ const c=tileCenterPx(pt.col,pt.row); ctx.beginPath(); ctx.arc(c.x,c.y,2.6,0,Math.PI*2); ctx.fill(); });
   });
 }
-
 function renderScoreboard(){
   document.getElementById('t1score').textContent=state.scores[0];
   document.getElementById('t2score').textContent=state.scores[1];
   document.getElementById('possTag').textContent='Possession '+state.possessionCount;
-  const clk=document.getElementById('clock');
-  clk.textContent=state.clock;
+  const clk=document.getElementById('clock'); clk.textContent=state.clock;
   clk.className='clock '+(state.clock>=13?'safe':state.clock>=7?'mid':'danger');
   const t1=document.getElementById('t1name'), t2=document.getElementById('t2name');
   t1.className='team-name'; t2.className='team-name';
@@ -577,113 +582,86 @@ function renderScoreboard(){
   offEl.textContent=(state.possession===0?'Team 1':'Team 2')+' • OFF';
   defEl.textContent=(state.possession===0?'Team 2':'Team 1')+' • DEF';
 }
-
 function renderPhaseBadge(){
   const badge=document.getElementById('phaseBadge');
   badge.className='phase-badge '+state.phase;
   const word=state.phase==='offense'?'OFFENSE TURN':'DEFENSE RESPONDING';
   badge.textContent='● '+word+' — '+state.actionPointsRemaining+' pt'+(state.actionPointsRemaining===1?'':'s')+' left';
 }
-
 function renderApDots(){
-  const dots=document.getElementById('apDots');
-  dots.innerHTML='';
+  const dots=document.getElementById('apDots'); dots.innerHTML='';
   const cls=state.phase==='offense'?'off':'def';
-  for(let i=0;i<AP_PER_TURN;i++){
-    const d=document.createElement('div');
-    d.className='ap-dot'+(i<state.actionPointsRemaining?(' filled '+cls):'');
-    dots.appendChild(d);
-  }
+  for(let i=0;i<AP_PER_TURN;i++){ const d=document.createElement('div');
+    d.className='ap-dot'+(i<state.actionPointsRemaining?(' filled '+cls):''); dots.appendChild(d); }
   document.getElementById('apLabel').textContent=state.actionPointsRemaining+' pt'+(state.actionPointsRemaining===1?'':'s');
 }
-
-// Context-sensitive action buttons (v4 actions panel)
 function renderActions(){
-  const box=document.getElementById('actionButtons');
-  box.innerHTML='';
+  const box=document.getElementById('actionButtons'); box.innerHTML='';
   const ap=state.actionPointsRemaining;
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
-
   const mkBtn=(label,cost,cls,handler,disabled,sub)=>{
-    const b=document.createElement('button');
-    b.className='btn '+(cls||'');
+    const b=document.createElement('button'); b.className='btn '+(cls||'');
     b.innerHTML='<span>'+label+'</span>'+(cost!==null?'<span class="cost">'+cost+'</span>':'');
-    if(disabled){ b.disabled=true; if(sub) b.title=sub; }
-    else b.addEventListener('click',handler);
+    if(disabled){ b.disabled=true; if(sub) b.title=sub; } else b.addEventListener('click',handler);
     box.appendChild(b);
   };
-
   if(state.phase==='offense'){
-    const carrier=getPiece(state.ballCarrier);
-    // SHOOT — first action only, by the ball carrier
     const canShoot=state.canShootThisTurn && state.actionsThisTurn===0;
-    mkBtn('🏀 SHOOT', 'FREE', 'shoot', ()=>shoot(), !canShoot, 'Can only shoot as the first action of a turn');
+    mkBtn('🏀 SHOOT','FREE','shoot',()=>shoot(), !canShoot, 'Can only shoot as the first action of a turn');
     if(!canShoot){ const s=document.createElement('div'); s.className='btn-sub'; s.textContent='first action only'; box.appendChild(s); }
-
     if(sel && sel.role==='offense'){
       if(isBallCarrier(sel)){
         mkBtn('Pass to teammate','1 pt','',()=>enterPassMode(), ap<1);
         const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Drive: tap a highlighted tile to move with the ball.'; box.appendChild(s);
       } else {
-        mkBtn('Cut toward basket','1 pt','',()=>directedMove(sel,'basket',1), ap<1);
+        mkBtn('Cut toward basket','1 pt','',()=>directedMove(sel,1), ap<1);
         mkBtn('Screen','2 pts','',()=>enterScreenMode(), ap<2);
         const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Space: tap a highlighted tile to reposition.'; box.appendChild(s);
       }
-    } else {
-      const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Select a piece, then move it (tap a tile) or use an action.'; box.appendChild(s);
-    }
+    } else { const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Select a piece, then move it (tap a tile) or use an action.'; box.appendChild(s); }
   } else {
-    // DEFENSE
     if(sel && sel.role==='defense'){
-      mkBtn('Sag toward paint','1 pt','',()=>directedMove(sel,'basket',1), ap<1);
+      mkBtn('Sag toward paint','1 pt','',()=>directedMove(sel,1), ap<1);
       mkBtn('Contest passing lane','1 pt','',()=>contestLane(sel), ap<1 || sel.contesting);
       mkBtn('Switch assignment','2 pts','',()=>switchAssignment(sel), ap<2);
       mkBtn('Double team','3 pts','danger',()=>doubleTeam(sel), ap<3, 'Uses the whole turn');
       mkBtn('Gamble steal','3 pts','danger',()=>gambleSteal(sel), ap<3, 'Uses the whole turn');
       const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Move: tap a highlighted tile (⚡ gold = 2-tile burst).'; box.appendChild(s);
-    } else {
-      const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Select a defender, then move (tap a tile) or use an action.'; box.appendChild(s);
-    }
+    } else { const s=document.createElement('div'); s.className='btn-sub'; s.textContent='Select a defender, then move (tap a tile) or use an action.'; box.appendChild(s); }
   }
 }
-
 function renderCoveragePanel(){
   const desc=document.getElementById('coverageDesc');
   desc.textContent=state.coverage==='man'
     ? 'Man-to-Man: coverage is set by how close the nearest defender is to the ball handler.'
-    : 'Zone: defenders own areas. v4 uses the same tile-distance check — the split deepens later.';
+    : 'Zone: defenders own areas. v5 uses the same tile-distance check — the split deepens later.';
   const carrier=getPiece(state.ballCarrier);
   const stateEl=document.getElementById('coverageState'), hintEl=document.getElementById('coverageHint');
   if(carrier){
-    const cov=coverageFor(carrier.col,carrier.row);
-    let dice=cov.dice, pressure='';
-    if(state.clock<=6){ dice=Math.max(1,dice-1); pressure=' (−1 clock pressure)'; }
-    const zone=ZONE_INFO[zoneAt(carrier.col,carrier.row)];
-    stateEl.textContent=cov.label+' · '+dice+'d';
-    hintEl.textContent=pieceLabel(carrier)+' in '+zone.name+' — need '+zone.threshold+'+ on '+dice+' di'+(dice===1?'e':'ce')+pressure+'.';
+    const s=computeShot(carrier.col,carrier.row);
+    stateEl.textContent=s.coverage+' · '+s.dice+'d ('+s.points+'pt)';
+    let bonusTxt=s.bonus?(' +'+s.bonus+' paint bonus'):''; let pressTxt=s.pressure?' (−1 clock pressure)':'';
+    hintEl.textContent=pieceLabel(carrier)+' in '+s.name+' ('+s.points+'pt) — need '+s.threshold+'+ on '+s.dice+' di'+(s.dice===1?'e':'ce')+bonusTxt+pressTxt+'.';
   } else { stateEl.textContent='—'; hintEl.textContent=''; }
 }
-
 function renderZonePill(){
   const pill=document.getElementById('zonePill');
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
-  if(!sel){ pill.innerHTML='<span class="pill-muted">Select a piece to see its spot</span>'; return; }
-  const zone=ZONE_INFO[zoneAt(sel.col,sel.row)];
-  const cov=coverageFor(sel.col,sel.row);
-  let dice=cov.dice; if(state.clock<=6) dice=Math.max(1,dice-1);
-  let html=pieceLabel(sel)+' <span class="pill-sep">in</span> <span class="pill-zone">'+zone.name+'</span>';
+  if(!sel){ pill.className='zone-pill'; pill.innerHTML='<span class="pill-muted">Select a piece to see its spot</span>'; return; }
+  const s=computeShot(sel.col,sel.row);
+  const three=isThreeZone(s.zoneKey);
+  pill.className='zone-pill'+(three?' three':'');
+  let html=pieceLabel(sel)+' <span class="pill-sep">in</span> <span class="pill-zone">'+s.name+'</span>';
+  html+=' <span class="pill-sep">·</span> <span class="'+(three?'pts3':'pts2')+'">'+s.points+' pts</span>';
   if(isBallCarrier(sel)) html+=' <span class="pill-ball">●ball</span>';
-  if(sel.fast) html+=' <span class="pill-sep">·</span> ⚡'+sel.stamina+' stam';
-  if(sel.role==='offense') html+=' <span class="pill-sep">·</span> '+dice+' di'+(dice===1?'e':'ce')+' · need '+zone.threshold+'+';
+  if(sel.fast) html+=' <span class="pill-sep">·</span> ⚡'+sel.stamina;
+  if(sel.role==='offense') html+=' <span class="pill-sep">·</span> '+s.dice+'d · need '+s.threshold+'+';
   pill.innerHTML=html;
 }
-
 function renderLog(){
-  const logEl=document.getElementById('log');
-  logEl.innerHTML='';
+  const logEl=document.getElementById('log'); logEl.innerHTML='';
   state.log.forEach(entry=>{ const e=document.createElement('div'); e.className='log-entry '+entry.type; e.textContent=entry.text; logEl.appendChild(e); });
 }
-
 function renderAll(){
   renderPieces(); renderLegal(); drawTrails();
   renderScoreboard(); renderPhaseBadge(); renderApDots(); renderActions();
@@ -701,47 +679,26 @@ function addLog(text,type){ state.log.push({text,type:type||'system'}); if(state
    TURN ENGINE (v4)
    ============================================================ */
 function startTurn(){
-  state.actionPointsRemaining=AP_PER_TURN;
-  state.actionsThisTurn=0;
-  state.canShootThisTurn=(state.phase==='offense');
-  state.selectedPiece=null; state.mode=null;
-  if(state.phase==='offense'){
-    setStatus(teamName(state.possession)+' on offense — 3 action points. Shoot now, or build your look.', null);
-  } else {
-    setStatus(teamName(1-state.possession)+' on defense — 3 action points to respond.', null);
-  }
+  state.actionPointsRemaining=AP_PER_TURN; state.actionsThisTurn=0;
+  state.canShootThisTurn=(state.phase==='offense'); state.selectedPiece=null; state.mode=null;
+  setStatus(state.phase==='offense'
+    ? teamName(state.possession)+' on offense — 3 action points. Shoot now, or build your look.'
+    : teamName(1-state.possession)+' on defense — 3 action points to respond.', null);
 }
-
-// Central action resolver. Spends points + clock, kills shoot eligibility,
-// auto-ends the turn at 0 points (with a brief flash). endsTurn forces a full-turn action.
 function takeAction(cost,opts){
   opts=opts||{};
-  state.actionPointsRemaining-=cost;
-  state.actionsThisTurn+=1;
-  state.canShootThisTurn=false;       // v4: no shooting after any action
-  state.clock=Math.max(0,state.clock-cost); // shared 24-click clock drains by cost
-  state.selectedPiece=null; state.mode=null;
-
+  state.actionPointsRemaining-=cost; state.actionsThisTurn+=1; state.canShootThisTurn=false;
+  state.clock=Math.max(0,state.clock-cost); state.selectedPiece=null; state.mode=null;
   if(state.clock<=0){ renderAll(); return shotClockViolation(); }
   if(opts.endsTurn || state.actionPointsRemaining<=0){ renderAll(); return flashEndTurn(); }
   renderAll();
 }
-
-// 0.5s flash of the AP dots before snapping to the next side's turn (feels better than instant).
 function flashEndTurn(){
-  busy=true;
-  const dots=document.getElementById('apDots');
-  dots.classList.add('flash');
+  busy=true; const dots=document.getElementById('apDots'); dots.classList.add('flash');
   document.getElementById('endTurnBtn').disabled=true;
   setTimeout(()=>{ dots.classList.remove('flash'); busy=false; endTurn(); }, 500);
 }
-
-function endTurn(){
-  state.phase = state.phase==='offense' ? 'defense' : 'offense';
-  startTurn();
-  renderAll();
-}
-
+function endTurn(){ state.phase=state.phase==='offense'?'defense':'offense'; startTurn(); renderAll(); }
 function endTurnEarly(){
   if(busy || state.gameOver) return;
   addLog((state.phase==='offense'?teamName(state.possession):teamName(1-state.possession))+' ends turn early.', state.phase);
@@ -753,47 +710,34 @@ function endTurnEarly(){
    ============================================================ */
 function onPieceClick(id){
   if(busy || state.gameOver) return;
-  const p=getPiece(id);
-  if(!p) return;
-
-  // PASS MODE: clicking an offense teammate completes the pass
+  const p=getPiece(id); if(!p) return;
   if(state.mode==='pass'){
-    if(p.role==='offense' && !isBallCarrier(p)){ return attemptPass(p); }
+    if(p.role==='offense' && !isBallCarrier(p)) return attemptPass(p);
     if(isBallCarrier(p)){ state.mode=null; setStatus('Pass cancelled.', null); return renderAll(); }
-    return; // ignore defenders in pass mode
+    return;
   }
-
-  // If my piece is selected and I tap a piece on a legal destination tile → move onto it
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
   if(sel && sel.id!==id && sel.role===state.phase && state.actionPointsRemaining>0){
     const d=chebyshev(sel,p);
     if(d===1) return moveTile(sel,p.col,p.row,false);
     if(d===2 && sel.fast && sel.stamina>0) return moveTile(sel,p.col,p.row,true);
   }
-
   if(p.role!==state.phase){ setStatus("It's the "+state.phase+" team's turn.", 'error'); return; }
-
   if(state.selectedPiece===id){ state.selectedPiece=null; setStatus('Deselected.', null); }
   else {
     state.selectedPiece=id;
-    const zone=ZONE_INFO[zoneAt(p.col,p.row)];
-    const ballNote=isBallCarrier(p)?' (has the ball)':'';
-    setStatus('Selected '+pieceLabel(p)+ballNote+' in '+zone.name+' — tap a highlighted tile to move, or pick an action.', null);
+    const s=computeShot(p.col,p.row);
+    setStatus('Selected '+pieceLabel(p)+(isBallCarrier(p)?' (has the ball)':'')+' in '+s.name+' ('+s.points+'pt) — tap a highlighted tile to move, or pick an action.', null);
   }
   renderAll();
 }
-
 function onTileClick(col,row){
   if(busy || state.gameOver) return;
-
-  // SCREEN MODE: click an adjacent tile to set the screen there
   if(state.mode==='screen'){
-    const sel=getPiece(state.selectedPiece);
-    if(!sel){ state.mode=null; return; }
+    const sel=getPiece(state.selectedPiece); if(!sel){ state.mode=null; return; }
     if(chebyshev(sel,{col,row})!==1){ setStatus('Screen must be set on an adjacent tile.', 'error'); return; }
     return setScreen(sel,col,row);
   }
-
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
   if(!sel){ setStatus('Select one of your pieces first.', 'error'); return; }
   if(state.actionPointsRemaining<=0){ setStatus('No action points left — end your turn.', 'error'); return; }
@@ -804,112 +748,72 @@ function onTileClick(col,row){
   if(d===2 && sel.fast && sel.stamina<=0){ setStatus('Out of stamina — '+pieceLabel(sel)+' can only burst with stamina.', 'error'); return; }
   setStatus('Too far — move 1 tile'+(sel.fast?' (or 2 with a ⚡ burst)':'')+'.', 'error');
 }
-
-/* ---------- moves ---------- */
 function moveTile(piece,col,row,burst){
   if(state.actionPointsRemaining<1) return;
   if(burst){ if(!piece.fast||piece.stamina<=0) return; piece.stamina-=1; }
-  const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name;
-  const toZone=ZONE_INFO[zoneAt(col,row)].name;
-  piece.col=col; piece.row=row;
-  piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
+  const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name, toZone=ZONE_INFO[zoneAt(col,row)].name;
+  piece.col=col; piece.row=row; piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
   const note=fromZone===toZone?toZone:(fromZone+' → '+toZone);
   addLog(pieceLabel(piece)+(burst?' ⚡bursts':': ')+note+(burst?' (−1pt,−1 stam)':' (−1pt)'), piece.role);
   takeAction(1);
 }
-
-// directed 1-tile move toward the basket (Cut / Sag)
-function directedMove(piece,target,cost){
+function directedMove(piece,cost){
   if(state.actionPointsRemaining<cost) return;
-  const tgt=RIM;
-  let sc = piece.col<tgt.col-0.5?1 : piece.col>tgt.col+0.5?-1:0;
-  let sr = piece.row<tgt.row?1 : piece.row>tgt.row?-1:0;
+  let sc=piece.col<RIM.col-0.5?1:piece.col>RIM.col+0.5?-1:0;
+  let sr=piece.row<RIM.row?1:piece.row>RIM.row?-1:0;
   let nc=piece.col+sc, nr=piece.row+sr;
-  if(!inBounds(nc,nr) || (nc===piece.col&&nr===piece.row)){ setStatus(pieceLabel(piece)+' is already at the rim.', 'error'); return; }
+  if(!inBounds(nc,nr)||(nc===piece.col&&nr===piece.row)){ setStatus(pieceLabel(piece)+' is already at the rim.', 'error'); return; }
   const verb=piece.role==='offense'?' cuts toward basket: ':' sags toward paint: ';
   const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name, toZone=ZONE_INFO[zoneAt(nc,nr)].name;
-  piece.col=nc; piece.row=nr;
-  piece.trail.push({col:nc,row:nr}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
+  piece.col=nc; piece.row=nr; piece.trail.push({col:nc,row:nr}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
   addLog(pieceLabel(piece)+verb+(fromZone===toZone?toZone:fromZone+' → '+toZone)+' (−1pt)', piece.role);
   takeAction(cost);
 }
 
-/* ---------- offense: pass + deflection (v3) ---------- */
+/* ---------- pass + deflection (v3) ---------- */
 function enterPassMode(){
   if(state.actionPointsRemaining<1) return;
   state.mode='pass'; state.selectedPiece=state.ballCarrier;
-  setStatus('Pass — tap a highlighted teammate to pass to (defenders in the lane may deflect).', null);
-  renderAll();
+  setStatus('Pass — tap a highlighted teammate to pass to (defenders in the lane may deflect).', null); renderAll();
 }
-
 function attemptPass(receiver){
   const passer=getPiece(state.ballCarrier);
-  // pass animation: white flash line passer → receiver
   flashPassLine(passer,receiver);
-  // deflection: any defender within ~1.1 tiles of the passing lane gets a roll.
-  // contesting defenders deflect on 4+, others on 5+ (d6).
   const defenders=state.pieces.filter(p=>p.role==='defense');
   let deflected=false, deflector=null;
   for(const d of defenders){
-    const dist=pointSegDist(d,passer,receiver);
-    if(dist<=1.1){
-      const need=d.contesting?4:5;
-      const roll=1+Math.floor(Math.random()*6);
+    if(pointSegDist(d,passer,receiver)<=1.1){
+      const need=d.contesting?4:5, roll=1+Math.floor(Math.random()*6);
       if(roll>=need){ deflected=true; deflector=d; break; }
     }
   }
   if(deflected){
     addLog('PASS DEFLECTED by '+pieceLabel(deflector)+' — steal! Turnover.', 'steal');
     setStatus('Stolen! '+pieceLabel(deflector)+' deflects the pass. Possession flips.', 'error');
-    // spend the action (clock ticks), then turnover ends possession
-    state.clock=Math.max(0,state.clock-1);
-    state.mode=null; state.selectedPiece=null;
+    state.clock=Math.max(0,state.clock-1); state.mode=null; state.selectedPiece=null;
     return flipPossession();
   }
-  // clean pass
   state.ballCarrier=receiver.id;
   addLog(pieceLabel(passer)+' passes to '+pieceLabel(receiver)+' (−1pt)', 'offense');
   takeAction(1);
 }
-
-/* ---------- offense: screen (v3 piece, v4 cost) ---------- */
-function enterScreenMode(){
-  if(state.actionPointsRemaining<2) return;
-  state.mode='screen';
-  setStatus('Screen — tap an adjacent tile to set the screen there (2 pts).', null);
-  renderAll();
-}
+/* ---------- screen ---------- */
+function enterScreenMode(){ if(state.actionPointsRemaining<2) return; state.mode='screen';
+  setStatus('Screen — tap an adjacent tile to set the screen there (2 pts).', null); renderAll(); }
 function setScreen(piece,col,row){
   const toZone=ZONE_INFO[zoneAt(col,row)].name;
-  piece.col=col; piece.row=row;
-  piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
-  addLog(pieceLabel(piece)+' sets a screen at '+toZone+' (−2pts)', 'offense');
-  takeAction(2);
+  piece.col=col; piece.row=row; piece.trail.push({col,row}); if(piece.trail.length>MAX_TRAIL) piece.trail.shift();
+  addLog(pieceLabel(piece)+' sets a screen at '+toZone+' (−2pts)', 'offense'); takeAction(2);
 }
-
-/* ---------- defense actions ---------- */
-function contestLane(d){
-  if(d.contesting) return;
-  d.contesting=true;
-  addLog(pieceLabel(d)+' contests the passing lane (−1pt)', 'defense');
-  takeAction(1);
-}
-function switchAssignment(d){
-  if(state.actionPointsRemaining<2) return;
-  addLog(pieceLabel(d)+' switches assignment (−2pts)', 'defense');
-  takeAction(2);
-}
+/* ---------- defense ---------- */
+function contestLane(d){ if(d.contesting) return; d.contesting=true; addLog(pieceLabel(d)+' contests the passing lane (−1pt)', 'defense'); takeAction(1); }
+function switchAssignment(d){ if(state.actionPointsRemaining<2) return; addLog(pieceLabel(d)+' switches assignment (−2pts)', 'defense'); takeAction(2); }
 function doubleTeam(d){
   if(state.actionPointsRemaining<3) return;
-  // move the defender to the open tile adjacent to the ball carrier nearest to it
-  const carrier=getPiece(state.ballCarrier);
-  let best=null, bestDist=Infinity;
+  const carrier=getPiece(state.ballCarrier); let best=null, bestDist=Infinity;
   for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
-    if(dc===0&&dr===0) continue;
-    const nc=carrier.col+dc, nr=carrier.row+dr;
-    if(!inBounds(nc,nr)) continue;
-    const dist=chebyshev(d,{col:nc,row:nr});
-    if(dist<bestDist){ bestDist=dist; best={col:nc,row:nr}; }
+    if(dc===0&&dr===0) continue; const nc=carrier.col+dc, nr=carrier.row+dr; if(!inBounds(nc,nr)) continue;
+    const dist=chebyshev(d,{col:nc,row:nr}); if(dist<bestDist){ bestDist=dist; best={col:nc,row:nr}; }
   }
   if(best){ d.col=best.col; d.row=best.row; d.trail.push({col:best.col,row:best.row}); if(d.trail.length>MAX_TRAIL) d.trail.shift(); }
   addLog(pieceLabel(d)+' double-teams the ball ('+pieceLabel(carrier)+') — full turn (−3pts)', 'defense');
@@ -917,25 +821,21 @@ function doubleTeam(d){
 }
 function gambleSteal(d){
   if(state.actionPointsRemaining<3) return;
-  const carrier=getPiece(state.ballCarrier);
-  const dist=chebyshev(d,carrier);
+  const carrier=getPiece(state.ballCarrier), dist=chebyshev(d,carrier);
   if(dist<=1){
     const roll=1+Math.floor(Math.random()*6);
     if(roll>=5){
       addLog(pieceLabel(d)+' gambles and STEALS it! (rolled '+roll+', −3pts)', 'steal');
       setStatus('Steal! '+pieceLabel(d)+' rips the ball. Possession flips.', 'error');
-      state.clock=Math.max(0,state.clock-3);
-      return flipPossession();
+      state.clock=Math.max(0,state.clock-3); return flipPossession();
     }
     addLog(pieceLabel(d)+' gambles for the steal — misses (rolled '+roll+'). Full turn burned (−3pts)', 'defense');
-  } else {
-    addLog(pieceLabel(d)+' gambles but is too far from the ball — whiffs (−3pts)', 'defense');
-  }
+  } else { addLog(pieceLabel(d)+' gambles but is too far from the ball — whiffs (−3pts)', 'defense'); }
   takeAction(3,{endsTurn:true});
 }
 
 /* ============================================================
-   PASS ANIMATION (white flash line, ~0.4s)
+   PASS ANIMATION
    ============================================================ */
 function flashPassLine(a,b){
   const ctx=document.getElementById('fxCanvas').getContext('2d');
@@ -943,88 +843,70 @@ function flashPassLine(a,b){
   ctx.clearRect(0,0,STAGE_W,STAGE_H);
   ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.lineWidth=3; ctx.setLineDash([]);
   ctx.shadowColor='rgba(255,255,255,0.9)'; ctx.shadowBlur=8;
-  ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
-  ctx.shadowBlur=0;
+  ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke(); ctx.shadowBlur=0;
   setTimeout(()=>ctx.clearRect(0,0,STAGE_W,STAGE_H), 420);
 }
 
 /* ============================================================
-   SHOOTING (v2 resolution; v4 shoot-first gate)
+   SHOOTING (v5 scoring + paint bonus; v4 shoot-first gate)
    ============================================================ */
 function shoot(){
-  if(busy || state.gameOver) return;
-  if(state.phase!=='offense') return;
-  // v4 hard gate — shoot ONLY as the first action of the turn
-  if(!state.canShootThisTurn || state.actionsThisTurn!==0){
-    setStatus('You can only shoot as the first action of a turn.', 'error'); return;
-  }
+  if(busy || state.gameOver || state.phase!=='offense') return;
+  if(!state.canShootThisTurn || state.actionsThisTurn!==0){ setStatus('You can only shoot as the first action of a turn.', 'error'); return; }
   const shooter=getPiece(state.ballCarrier);
-  const zone=ZONE_INFO[zoneAt(shooter.col,shooter.row)];
-  const cov=coverageFor(shooter.col,shooter.row);
-  let dice=cov.dice, pressureApplied=false;
-  if(state.clock<=6){ dice=Math.max(1,dice-1); pressureApplied=true; }
-  addLog(pieceLabel(shooter)+' shoots from '+zone.name+' — '+cov.label+', '+dice+'d', 'system');
-  const rolls=[]; for(let i=0;i<dice;i++) rolls.push(1+Math.floor(Math.random()*6));
-  const made=rolls.some(r=>r>=zone.threshold);
-  showShotResult(shooter,zone,cov,dice,rolls,made,pressureApplied);
+  const s=computeShot(shooter.col,shooter.row); // points, dice, bonus, threshold all here
+  addLog(pieceLabel(shooter)+' shoots from '+s.name+' ('+s.points+'pt) — '+s.coverage+', '+s.dice+'d', 'system');
+  const rolls=[]; for(let i=0;i<s.dice;i++) rolls.push(1+Math.floor(Math.random()*6));
+  const made=rolls.some(r=>r>=s.threshold);
+  showShotResult(shooter,s,rolls,made);
 }
-
 let pendingResult=null;
-function showShotResult(shooter,zone,cov,dice,rolls,made,pressureApplied){
-  document.getElementById('shotZone').innerHTML='Shot from <b>'+zone.name+'</b> · need <b>'+zone.threshold+'+</b>';
-  document.getElementById('shotCoverage').textContent=cov.label+' — rolling '+dice+' di'+(dice===1?'e':'ce')+(pressureApplied?' (clock pressure −1)':'');
+function showShotResult(shooter,s,rolls,made){
+  document.getElementById('shotHeadline').textContent=shotHeadline(s.zoneKey);
+  document.getElementById('shotZone').innerHTML='<b>'+s.name+'</b> · '+(s.points===3?'3-pointer':'2-pointer')+' · need <b>'+s.threshold+'+</b>';
+  let covLine=s.coverage+' · '+s.baseDice+' di'+(s.baseDice===1?'e':'ce');
+  if(s.bonus) covLine+=' + '+s.bonus+' paint bonus = '+ (s.pressure? (s.dice+1) : s.dice) +' dice';
+  if(s.pressure) covLine+=' · clock pressure −1';
+  document.getElementById('shotCoverage').textContent=covLine;
+  document.getElementById('shotBonus').textContent = s.bonus? ('Paint bonus: +'+s.bonus+' die (at-rim)') : '';
   const tray=document.getElementById('diceTray'); tray.innerHTML='';
-  rolls.forEach((r,i)=>{ const dd=document.createElement('div'); dd.className='die '+(r>=zone.threshold?'hit':'cold'); dd.textContent=r; dd.style.animationDelay=(i*0.08)+'s'; tray.appendChild(dd); });
+  rolls.forEach((r,i)=>{ const dd=document.createElement('div'); dd.className='die '+(r>=s.threshold?'hit':'cold'); dd.textContent=r; dd.style.animationDelay=(i*0.08)+'s'; tray.appendChild(dd); });
   const outcome=document.getElementById('outcome'), detail=document.getElementById('outcomeDetail');
   if(made){
-    outcome.className='outcome make'; outcome.textContent='BUCKET! +2';
-    const hits=rolls.filter(r=>r>=zone.threshold);
-    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+zone.threshold+'+. '+hits.length+' die'+(hits.length===1?'':' rolls')+' hit. Two points.';
+    outcome.className='outcome '+(s.points===3?'pts3':'pts2'); outcome.textContent=s.points+' POINTS';
+    const hits=rolls.filter(r=>r>=s.threshold);
+    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. '+hits.length+' hit. '+(s.points===3?'A three!':'Bucket.');
   } else {
     outcome.className='outcome miss'; outcome.textContent='NO GOOD';
-    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+zone.threshold+'+. None hit. Off the rim.';
+    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. None hit. Off the rim.';
   }
-  pendingResult={shooter,made};
+  pendingResult={shooter,made,points:s.points,zoneName:s.name,three:s.points===3};
   document.getElementById('overlay').classList.add('show');
 }
 function dismissShot(){
   document.getElementById('overlay').classList.remove('show');
-  const res=pendingResult; pendingResult=null;
-  if(!res) return;
+  const res=pendingResult; pendingResult=null; if(!res) return;
   if(res.made){
-    state.scores[state.possession]+=2;
-    const z=ZONE_INFO[zoneAt(res.shooter.col,res.shooter.row)].name;
-    addLog(teamName(state.possession)+' scores! '+z+' bucket. ('+state.scores[0]+'–'+state.scores[1]+')', 'make');
+    state.scores[state.possession]+=res.points; // v5: 2 or 3 by zone
+    const verb=res.three?(pieceLabel(res.shooter)+' hits from '+res.zoneName+' — 3 POINTS'):(pieceLabel(res.shooter)+' scores in '+res.zoneName+' — 2 POINTS');
+    addLog(verb+' ('+state.scores[0]+'–'+state.scores[1]+')', res.three?'make3':'make');
     if(state.scores[state.possession]>=WIN_SCORE) return endGame(state.possession);
-  } else {
-    addLog('Miss — '+teamName(state.possession)+' comes up empty.', 'miss');
-  }
+  } else { addLog('Miss — '+teamName(state.possession)+' comes up empty.', 'miss'); }
   flipPossession();
 }
 
 /* ============================================================
-   POSSESSION / CLOCK
+   POSSESSION / CLOCK / GAME OVER
    ============================================================ */
 function shotClockViolation(){
   addLog('⏱ Shot-clock violation — '+teamName(state.possession)+' turns it over.', 'system');
-  setStatus('Shot-clock violation! Possession flips.', 'error');
-  flipPossession();
+  setStatus('Shot-clock violation! Possession flips.', 'error'); flipPossession();
 }
 function flipPossession(){
-  state.possession=1-state.possession;
-  state.possessionCount++;
-  state.clock=24;
-  state.pieces=freshPieces();   // resets positions, stamina, trails, contesting
-  state.ballCarrier='o0';       // new offense's O1 brings the ball up
-  state.phase='offense';
-  startTurn();
-  addLog('— '+teamName(state.possession)+' ball. Clock reset to 24. —', 'system');
-  renderAll();
+  state.possession=1-state.possession; state.possessionCount++; state.clock=24;
+  state.pieces=freshPieces(); state.ballCarrier='o0'; state.phase='offense';
+  startTurn(); addLog('— '+teamName(state.possession)+' ball. Clock reset to 24. —', 'system'); renderAll();
 }
-
-/* ============================================================
-   GAME OVER
-   ============================================================ */
 function endGame(winner){
   state.gameOver=true;
   addLog('🏆 '+teamName(winner)+' wins '+state.scores[0]+'–'+state.scores[1]+'!', 'make');
@@ -1036,19 +918,14 @@ function endGame(winner){
 function resetGame(){
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
-  busy=false;
-  initState();
-  addLog('— New game. Team 1 ball. First to 21. —', 'system');
-  startTurn();
-  renderAll();
+  busy=false; initState(); addLog('— New game. Team 1 ball. First to 21. —', 'system'); startTurn(); renderAll();
 }
 
 /* ============================================================
    UI TOGGLES
    ============================================================ */
 function setCoverage(scheme){
-  if(state.gameOver) return;
-  state.coverage=scheme;
+  if(state.gameOver) return; state.coverage=scheme;
   document.getElementById('manBtn').classList.toggle('active',scheme==='man');
   document.getElementById('zoneBtn').classList.toggle('active',scheme==='zone');
   addLog('Defense sets up in '+(scheme==='man'?'Man-to-Man':'Zone')+'.', 'defense');
