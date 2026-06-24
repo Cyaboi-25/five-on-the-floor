@@ -94,6 +94,14 @@
   /* off-turn team stays clearly visible (was 0.42 — too faint to see both teams) */
   .piece.dim { opacity:0.72; }
   .piece.dim:not(.setupable) { cursor:default; }
+  /* v6a size classes — Small/Medium/Large circles (S=30/M=36/L=42px on a 600px court) */
+  .piece.sz-small  { width:5%; }
+  .piece.sz-medium { width:6%; }
+  .piece.sz-large  { width:7%; }
+  /* v6a three-second indicators */
+  .piece.paint-warn { animation:paintpulse 0.8s ease-in-out infinite; }
+  @keyframes paintpulse { 50% { box-shadow:0 0 0 3px rgba(232,160,48,0.95), 0 2px 6px rgba(0,0,0,0.5); } }
+  .piece .paint-badge { position:absolute; top:-7px; left:-6px; font-size:9px; font-weight:800; text-shadow:0 0 3px #000; pointer-events:none; }
   .piece.pass-cand { box-shadow:0 0 0 3px rgba(255,255,255,0.85), 0 0 10px 2px rgba(255,255,255,0.5); cursor:pointer; }
   .piece.has-ball { border-color:#fff; }
   .piece .ball-dot { position:absolute; top:-5px; right:-5px; width:48%; height:48%; border-radius:50%;
@@ -328,29 +336,45 @@
           <h3>Fast Pieces ⚡ + Stamina</h3>
           ⚡ pieces can <b>burst 2 tiles</b> (gold tiles) for 1 stamina. Stamina refills each possession.
 
-          <h3>Zone Values &amp; Difficulty</h3>
-          <!-- v5 ZONE → POINTS map (search "ZONE_INFO" in JS to adjust) -->
+          <h3>Piece Sizes</h3>
+          Every piece has a size shown on its circle (<b>S</b>/<b>M</b>/<b>L</b>):
+          <ul>
+            <li><b>Large (L)</b> — dominant in the paint, <b>+1 bonus die</b> near the rim. Poor on the perimeter; can't hit from Top of Key (needs 7).</li>
+            <li><b>Medium (M)</b> — versatile, no bonus or penalty. Solid everywhere.</li>
+            <li><b>Small (S)</b> — best perimeter shooter; corners (need 3+) and wings are home. Vulnerable inside vs bigs.</li>
+          </ul>
+
+          <h3>Scoring</h3>
+          Inside the arc (Paint, Elbow, Dunker) = <b>2</b> points. Outside the arc
+          (<span class="g3">Corner, Wing, Top of Key, Half Court</span>) = <span class="g3"><b>3</b></span> points.
+
+          <h3>Shooting Thresholds (by size)</h3>
+          Roll your dice — any die that meets the threshold makes the shot. Threshold depends on zone <i>and</i> shooter size:
           <table>
-            <tr><th>Zone</th><th>Points</th><th>Need</th><th>Paint Bonus</th></tr>
-            <tr><td>Paint</td><td>2</td><td>4+</td><td class="g3">+1 die</td></tr>
-            <tr><td>Dunker Spot</td><td>2</td><td>5+</td><td class="g3">+1 die</td></tr>
-            <tr><td>Elbow L/R</td><td>2</td><td>5+</td><td>—</td></tr>
-            <tr><td><span class="g3">Corner L/R</span></td><td class="g3">3</td><td>4+</td><td>—</td></tr>
-            <tr><td><span class="g3">Wing L/R</span></td><td class="g3">3</td><td>5+</td><td>—</td></tr>
-            <tr><td><span class="g3">Top of Key</span></td><td class="g3">3</td><td>6</td><td>—</td></tr>
-            <tr><td><span class="g3">Half Court</span></td><td class="g3">3</td><td>6</td><td>—</td></tr>
+            <tr><th>Zone</th><th>S</th><th>M</th><th>L</th><th>Pts</th></tr>
+            <tr><td><span class="g3">Corner L/R</span></td><td>3+</td><td>4+</td><td>5+</td><td class="g3">3</td></tr>
+            <tr><td><span class="g3">Wing L/R</span></td><td>4+</td><td>5+</td><td>6</td><td class="g3">3</td></tr>
+            <tr><td><span class="g3">Top of Key</span></td><td>6</td><td>6</td><td>7*</td><td class="g3">3</td></tr>
+            <tr><td><span class="g3">Half Court</span></td><td>7*</td><td>7*</td><td>7*</td><td class="g3">3</td></tr>
+            <tr><td>Paint</td><td>4+</td><td>4+</td><td>4+</td><td>2 +die</td></tr>
+            <tr><td>Dunker</td><td>4+</td><td>5+</td><td>4+</td><td>2 +die</td></tr>
+            <tr><td>Elbow L/R</td><td>5+</td><td>5+</td><td>6</td><td>2</td></tr>
           </table>
-          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">The gold line on the court is the 3-point line — outside it scores 3.</div>
+          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">* threshold 7 = impossible on a d6 (auto-miss). A card override comes in v6c.</div>
 
           <h3>Shot Quality → Dice</h3>
-          Dice = coverage (tile distance to nearest defender) <b>plus</b> the paint bonus, capped at 4:
+          Dice = coverage (tile distance to nearest defender). <b>Large</b> pieces get <b>+1 die</b> in the Paint/Dunker (cap 5):
           <table>
-            <tr><th>Coverage</th><th>Base</th><th>Paint Total</th></tr>
+            <tr><th>Coverage</th><th>Base</th><th>Large in paint</th></tr>
             <tr><td>Wide Open (3+ tiles)</td><td>3</td><td class="g3">4</td></tr>
             <tr><td>Open (2 tiles)</td><td>2</td><td class="g3">3</td></tr>
             <tr><td>Contested (0–1 tiles)</td><td>1</td><td class="g3">2</td></tr>
           </table>
-          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Only Paint &amp; Dunker get the +1 at-rim bonus. Clock ≤ 6 → −1 die (min 1).</div>
+          <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Clock ≤ 6 → −1 die (min 1).</div>
+
+          <h3>Three-Second Rule</h3>
+          Offensive pieces can't camp the Paint/Dunker for 3 straight turns. <b>⚠ warning at 2 turns</b>
+          (orange pulse). <b>Violation at 3</b> — the team loses <b>2 clicks</b> and the counter resets. Leaving the paint resets it.
 
           <h3>Shot Clock</h3>
           24 clicks, shared. Every action point = 1 click. 0 = violation, ball turns over.
@@ -428,18 +452,26 @@ function classifyZone(col,row){
 let ZONE_GRID=[];
 function buildZones(){ ZONE_GRID=[]; for(let r=0;r<ROWS;r++){ const row=[]; for(let c=0;c<COLS;c++) row.push(classifyZone(c,r)); ZONE_GRID.push(row); } }
 
-// ZONE_INFO — v5 ZONE-TO-POINTS MAP (adjust here during playtesting).
-// points: 2 = inside arc, 3 = outside arc. threshold: min single-die roll to make.
+// v6a PIECE SIZES — small (guards), medium (wings), large (bigs). o4/d4 are the centers.
+const PIECE_SIZES={ o0:'small',o1:'small',o2:'medium',o3:'medium',o4:'large',
+                    d0:'small',d1:'small',d2:'medium',d3:'medium',d4:'large' };
+
+// ZONE_INFO — v6a: points by zone + per-SIZE shooting thresholds (th.s/m/l).
+// points: 2 = inside arc, 3 = outside arc. threshold = min single-die roll to make.
+// A threshold of 7 is impossible on a d6 (auto-miss) — "card override in v6c will make this possible".
 const ZONE_INFO={
-  hc:{name:'Half Court',threshold:6,points:3},  tok:{name:'Top of Key',threshold:6,points:3},
-  wl:{name:'Wing Left',threshold:5,points:3},   wr:{name:'Wing Right',threshold:5,points:3},
-  cl:{name:'Corner Left',threshold:4,points:3}, cr:{name:'Corner Right',threshold:4,points:3},
-  el:{name:'Elbow Left',threshold:5,points:2},  er:{name:'Elbow Right',threshold:5,points:2},
-  pt:{name:'Paint',threshold:4,points:2},
-  dkl:{name:'Dunker Left',threshold:5,points:2}, dkr:{name:'Dunker Right',threshold:5,points:2},
+  hc:{name:'Half Court', points:3, th:{s:7,m:7,l:7}},
+  tok:{name:'Top of Key',points:3, th:{s:6,m:6,l:7}},
+  wl:{name:'Wing Left',  points:3, th:{s:4,m:5,l:6}},  wr:{name:'Wing Right', points:3, th:{s:4,m:5,l:6}},
+  cl:{name:'Corner Left',points:3, th:{s:3,m:4,l:5}},  cr:{name:'Corner Right',points:3, th:{s:3,m:4,l:5}},
+  el:{name:'Elbow Left', points:2, th:{s:5,m:5,l:6}},  er:{name:'Elbow Right',points:2, th:{s:5,m:5,l:6}},
+  pt:{name:'Paint',      points:2, th:{s:4,m:4,l:4}},
+  dkl:{name:'Dunker Left',points:2,th:{s:4,m:5,l:4}},  dkr:{name:'Dunker Right',points:2,th:{s:4,m:5,l:4}},
 };
-// Paint bonus (+1 at-rim die) applies ONLY to these zones (not elbow).
+// Paint bonus (+1 die) applies in these zones — v6a: ONLY for Large pieces (at-rim finishing).
 const PAINT_BONUS_ZONES=['pt','dkl','dkr'];
+function sizeKey(size){ return size==='large'?'l':size==='small'?'s':'m'; }
+function thresholdFor(zoneKey,size){ return ZONE_INFO[zoneKey].th[sizeKey(size)]; }
 
 const ZONE_TINT={ pt:'rgba(232,80,80,0.12)', cl:'rgba(61,186,110,0.10)', cr:'rgba(61,186,110,0.10)',
   wl:'rgba(74,158,232,0.08)', wr:'rgba(74,158,232,0.08)', el:'rgba(232,160,48,0.08)', er:'rgba(232,160,48,0.08)',
@@ -483,10 +515,10 @@ function undoMove(){
 
 function freshPieces(){
   const pieces=[];
-  OFFENSE_START.forEach((s,i)=>{ const fast=FAST_OFFENSE.includes(i);
-    pieces.push({id:'o'+i,role:'offense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0}); });
-  DEFENSE_START.forEach((s,i)=>{ const fast=FAST_DEFENSE.includes(i);
-    pieces.push({id:'d'+i,role:'defense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,contesting:false}); });
+  OFFENSE_START.forEach((s,i)=>{ const id='o'+i, fast=FAST_OFFENSE.includes(i);
+    pieces.push({id,role:'offense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,size:PIECE_SIZES[id],paintTurns:0}); });
+  DEFENSE_START.forEach((s,i)=>{ const id='d'+i, fast=FAST_DEFENSE.includes(i);
+    pieces.push({id,role:'defense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,contesting:false,size:PIECE_SIZES[id],paintTurns:0}); });
   return pieces;
 }
 function initState(){
@@ -504,6 +536,8 @@ function chebyshev(a,b){ return Math.max(Math.abs(a.col-b.col),Math.abs(a.row-b.
 function tileCenterPx(c,r){ return {x:(c+0.5)*TILE_W, y:(r+0.5)*TILE_H}; }
 function getPiece(id){ return state.pieces.find(p=>p.id===id); }
 function pieceLabel(p){ return (p.role==='offense'?'O':'D')+(parseInt(p.id.slice(1))+1); }
+// v6a: the circle shows the SIZE letter + number (S1, M3, L5); team is shown by color.
+function circleText(p){ return (p.size==='small'?'S':p.size==='large'?'L':'M')+(parseInt(p.id.slice(1))+1); }
 function teamName(t){ return 'Team '+(t+1); }
 function isBallCarrier(p){ return p && p.id===state.ballCarrier; }
 function tileOccupied(col,row){ return state.pieces.some(p=>p.col===col&&p.row===row); }
@@ -512,7 +546,8 @@ function isSetup(){ return state.phase==='setup-off'||state.phase==='setup-def';
 function setupRole(){ return state.phase==='setup-def'?'defense':'offense'; }
 function activeRole(){ return isSetup()?setupRole():state.phase; } // whose pieces are "live" right now
 function isThreeZone(zoneKey){ return ZONE_INFO[zoneKey].points===3; }
-function paintBonusFor(zoneKey){ return PAINT_BONUS_ZONES.includes(zoneKey)?1:0; }
+// v6a: paint bonus is Large-only
+function paintBonusFor(zoneKey,size){ return (size==='large' && PAINT_BONUS_ZONES.includes(zoneKey))?1:0; }
 
 function coverageFor(col,row){
   const defenders=state.pieces.filter(p=>p.role==='defense');
@@ -523,17 +558,20 @@ function coverageFor(col,row){
   return {label:'Wide Open',dice:3};
 }
 
-// v5: full shot math at a tile — coverage dice + paint bonus (cap 4) + clock pressure.
-function computeShot(col,row){
+// v6a: full shot math at a tile for a piece of a given SIZE —
+// coverage dice + Large paint bonus (cap 5) + clock pressure, and the size-based threshold.
+function computeShot(col,row,size){
+  size=size||'medium';
   const zoneKey=zoneAt(col,row);
   const info=ZONE_INFO[zoneKey];
   const cov=coverageFor(col,row);
-  const bonus=paintBonusFor(zoneKey);
-  let dice=Math.min(4, cov.dice+bonus);   // cap total at 4 (wide-open paint = 3+1)
+  const bonus=paintBonusFor(zoneKey,size);
+  let dice=Math.min(5, cov.dice+bonus);   // v6a cap at 5 dice
   let pressure=false;
   if(state.clock<=6){ dice=Math.max(1,dice-1); pressure=true; }
-  return { zoneKey, name:info.name, points:info.points, threshold:info.threshold,
-           coverage:cov.label, baseDice:cov.dice, bonus, dice, pressure };
+  const threshold=thresholdFor(zoneKey,size);
+  return { zoneKey, name:info.name, points:info.points, threshold, impossible:threshold>6,
+           coverage:cov.label, baseDice:cov.dice, bonus, dice, pressure, size };
 }
 
 function pointSegDist(p,a,b){
@@ -580,16 +618,24 @@ function renderPieces(){
   layer.innerHTML='';
   state.pieces.forEach(p=>{
     const el=document.createElement('div');
-    el.className='piece '+p.role;
+    el.className='piece '+p.role+' sz-'+p.size;
     if(p.id===state.selectedPiece) el.classList.add('selected');
     if(p.role===activeRole()) el.classList.add('setupable'); else el.classList.add('dim');
     if(isBallCarrier(p)) el.classList.add('has-ball');
     if(state.mode==='pass' && p.role==='offense' && !isBallCarrier(p)) el.classList.add('pass-cand');
+    if(p.role==='offense' && p.paintTurns>=2) el.classList.add('paint-warn'); // 3-second warning
     el.style.left=((p.col+0.5)/COLS*100)+'%';
     el.style.top=((p.row+0.5)/ROWS*100)+'%';
-    el.textContent=pieceLabel(p);
+    el.textContent=circleText(p);  // v6a: size letter + number, e.g. "L5"
+    el.title=pieceLabel(p)+' · '+p.size;
     if(isBallCarrier(p)){ const b=document.createElement('div'); b.className='ball-dot'; el.appendChild(b); }
-    if(p.fast){ const f=document.createElement('div'); f.className='fast-bolt'; f.textContent='⚡'+p.stamina; el.appendChild(f); el.title='Fast — '+p.stamina+' stamina'; }
+    if(p.fast){ const f=document.createElement('div'); f.className='fast-bolt'; f.textContent='⚡'+p.stamina; el.appendChild(f); }
+    if(p.role==='offense' && p.paintTurns>=1){
+      const pb=document.createElement('div'); pb.className='paint-badge';
+      pb.textContent = p.paintTurns>=2 ? ('⚠'+p.paintTurns) : String(p.paintTurns);
+      pb.style.color = p.paintTurns>=2 ? '#E8A030' : '#fff';
+      el.appendChild(pb);
+    }
     el.addEventListener('click',(e)=>{ e.stopPropagation(); onPieceClick(p.id); });
     layer.appendChild(el);
   });
@@ -699,24 +745,25 @@ function renderCoveragePanel(){
   const carrier=getPiece(state.ballCarrier);
   const stateEl=document.getElementById('coverageState'), hintEl=document.getElementById('coverageHint');
   if(carrier){
-    const s=computeShot(carrier.col,carrier.row);
+    const s=computeShot(carrier.col,carrier.row,carrier.size);
     stateEl.textContent=s.coverage+' · '+s.dice+'d ('+s.points+'pt)';
-    let bonusTxt=s.bonus?(' +'+s.bonus+' paint bonus'):''; let pressTxt=s.pressure?' (−1 clock pressure)':'';
-    hintEl.textContent=pieceLabel(carrier)+' in '+s.name+' ('+s.points+'pt) — need '+s.threshold+'+ on '+s.dice+' di'+(s.dice===1?'e':'ce')+bonusTxt+pressTxt+'.';
+    let bonusTxt=s.bonus?(' +'+s.bonus+' Large paint bonus'):''; let pressTxt=s.pressure?' (−1 clock pressure)':'';
+    let warnTxt=s.impossible?' ⚠️ need 7 (impossible on a d6)':'';
+    hintEl.textContent=pieceLabel(carrier)+' ('+s.size+') in '+s.name+' ('+s.points+'pt) — need '+s.threshold+'+ on '+s.dice+' di'+(s.dice===1?'e':'ce')+bonusTxt+pressTxt+'.'+warnTxt;
   } else { stateEl.textContent='—'; hintEl.textContent=''; }
 }
 function renderZonePill(){
   const pill=document.getElementById('zonePill');
   const sel=state.selectedPiece?getPiece(state.selectedPiece):null;
   if(!sel){ pill.className='zone-pill'; pill.innerHTML='<span class="pill-muted">Select a piece to see its spot</span>'; return; }
-  const s=computeShot(sel.col,sel.row);
+  const s=computeShot(sel.col,sel.row,sel.size);
   const three=isThreeZone(s.zoneKey);
   pill.className='zone-pill'+(three?' three':'');
-  let html=pieceLabel(sel)+' <span class="pill-sep">in</span> <span class="pill-zone">'+s.name+'</span>';
+  let html=circleText(sel)+' <span class="pill-sep">('+sel.size+') in</span> <span class="pill-zone">'+s.name+'</span>';
   html+=' <span class="pill-sep">·</span> <span class="'+(three?'pts3':'pts2')+'">'+s.points+' pts</span>';
   if(isBallCarrier(sel)) html+=' <span class="pill-ball">●ball</span>';
   if(sel.fast) html+=' <span class="pill-sep">·</span> ⚡'+sel.stamina;
-  if(sel.role==='offense') html+=' <span class="pill-sep">·</span> '+s.dice+'d · need '+s.threshold+'+';
+  if(sel.role==='offense') html+=' <span class="pill-sep">·</span> '+s.dice+'d · need '+(s.impossible?(s.threshold+'+ ⚠️'):(s.threshold+'+'));
   pill.innerHTML=html;
 }
 function renderLog(){
@@ -797,7 +844,33 @@ function flashEndTurn(){
   document.getElementById('endTurnBtn').disabled=true;
   setTimeout(()=>{ dots.classList.remove('flash'); busy=false; endTurn(); }, 500);
 }
-function endTurn(){ state.phase=state.phase==='offense'?'defense':'offense'; startTurn(); renderAll(); }
+// v6a THREE-SECOND RULE — runs when an offense turn ends. Each offense piece in
+// Paint/Dunker accrues a paintTurn; resets when it leaves. 2 = warning, 3 = violation
+// (−2 clicks, counter resets). Returns true if the penalty drained the clock to 0.
+function updatePaintTurns(){
+  let violationToZero=false;
+  state.pieces.filter(p=>p.role==='offense').forEach(p=>{
+    const inPaint=PAINT_BONUS_ZONES.includes(zoneAt(p.col,p.row)); // pt/dkl/dkr
+    if(!inPaint){ p.paintTurns=0; return; }
+    p.paintTurns+=1;
+    if(p.paintTurns===2){
+      addLog('⚠️ '+pieceLabel(p)+' — 3-second warning (2 turns in the paint)','system');
+    } else if(p.paintTurns>=3){
+      addLog('🚫 3-second violation — '+pieceLabel(p)+' camped the paint, −2 clicks.','system');
+      state.clock=Math.max(0,state.clock-2);
+      p.paintTurns=0;
+      if(state.clock<=0) violationToZero=true;
+    }
+  });
+  return violationToZero;
+}
+function endTurn(){
+  if(state.phase==='offense'){
+    const drained=updatePaintTurns();
+    if(drained || state.clock<=0){ return shotClockViolation(); } // penalty killed the clock
+  }
+  state.phase=state.phase==='offense'?'defense':'offense'; startTurn(); renderAll();
+}
 function endTurnEarly(){
   if(busy || state.gameOver) return;
   addLog((state.phase==='offense'?teamName(state.possession):teamName(1-state.possession))+' ends turn early.', state.phase);
@@ -831,8 +904,8 @@ function onPieceClick(id){
   if(state.selectedPiece===id){ state.selectedPiece=null; setStatus('Deselected.', null); }
   else {
     state.selectedPiece=id;
-    const s=computeShot(p.col,p.row);
-    setStatus('Selected '+pieceLabel(p)+(isBallCarrier(p)?' (has the ball)':'')+' in '+s.name+' ('+s.points+'pt) — tap a highlighted tile to move, or pick an action.', null);
+    const s=computeShot(p.col,p.row,p.size);
+    setStatus('Selected '+pieceLabel(p)+' ('+p.size+')'+(isBallCarrier(p)?' (has the ball)':'')+' in '+s.name+' ('+s.points+'pt) — tap a highlighted tile to move, or pick an action.', null);
   }
   renderAll();
 }
@@ -972,8 +1045,8 @@ function shoot(){
   if(busy || state.gameOver || state.phase!=='offense') return;
   if(!state.canShootThisTurn || state.actionsThisTurn!==0){ setStatus('You can only shoot as the first action of a turn.', 'error'); return; }
   const shooter=getPiece(state.ballCarrier);
-  const s=computeShot(shooter.col,shooter.row); // points, dice, bonus, threshold all here
-  addLog(pieceLabel(shooter)+' shoots from '+s.name+' ('+s.points+'pt) — '+s.coverage+', '+s.dice+'d', 'system');
+  const s=computeShot(shooter.col,shooter.row,shooter.size); // points, dice, bonus, threshold all here
+  addLog(pieceLabel(shooter)+' ('+s.size+') shoots from '+s.name+' ('+s.points+'pt) — '+s.coverage+', '+s.dice+'d'+(s.impossible?' ⚠️need 7':''), 'system');
   const rolls=[]; for(let i=0;i<s.dice;i++) rolls.push(1+Math.floor(Math.random()*6));
   const made=rolls.some(r=>r>=s.threshold);
   showShotResult(shooter,s,rolls,made);
@@ -981,22 +1054,27 @@ function shoot(){
 let pendingResult=null;
 function showShotResult(shooter,s,rolls,made){
   document.getElementById('shotHeadline').textContent=shotHeadline(s.zoneKey);
-  document.getElementById('shotZone').innerHTML='<b>'+s.name+'</b> · '+(s.points===3?'3-pointer':'2-pointer')+' · need <b>'+s.threshold+'+</b>';
+  document.getElementById('shotZone').innerHTML='<b>'+s.name+'</b> · '+(s.points===3?'3-pointer':'2-pointer')+' · '+s.size+' · need <b>'+s.threshold+'+</b>';
   let covLine=s.coverage+' · '+s.baseDice+' di'+(s.baseDice===1?'e':'ce');
-  if(s.bonus) covLine+=' + '+s.bonus+' paint bonus = '+ (s.pressure? (s.dice+1) : s.dice) +' dice';
+  if(s.bonus) covLine+=' + '+s.bonus+' paint bonus (Large) = '+ (s.pressure? (s.dice+1) : s.dice) +' dice';
   if(s.pressure) covLine+=' · clock pressure −1';
+  covLine+=' total';
   document.getElementById('shotCoverage').textContent=covLine;
-  document.getElementById('shotBonus').textContent = s.bonus? ('Paint bonus: +'+s.bonus+' die (at-rim)') : '';
+  // threshold-7 warning takes priority over the paint-bonus note
+  document.getElementById('shotBonus').textContent = s.impossible
+    ? '⚠️ Very low % — threshold 7 (d6 max is 6)'
+    : (s.bonus? ('Paint bonus: +'+s.bonus+' die (Large at the rim)') : '');
   const tray=document.getElementById('diceTray'); tray.innerHTML='';
   rolls.forEach((r,i)=>{ const dd=document.createElement('div'); dd.className='die '+(r>=s.threshold?'hit':'cold'); dd.textContent=r; dd.style.animationDelay=(i*0.08)+'s'; tray.appendChild(dd); });
   const outcome=document.getElementById('outcome'), detail=document.getElementById('outcomeDetail');
   if(made){
-    outcome.className='outcome '+(s.points===3?'pts3':'pts2'); outcome.textContent=s.points+' POINTS';
+    outcome.className='outcome '+(s.points===3?'pts3':'pts2');
+    outcome.textContent=(s.points===3?'THREE! +3':'BUCKET! +2');   // v6a: gold three / green two
     const hits=rolls.filter(r=>r>=s.threshold);
-    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. '+hits.length+' hit. '+(s.points===3?'A three!':'Bucket.');
+    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. '+hits.length+' hit. '+(s.points===3?'Three points!':'Two points.');
   } else {
     outcome.className='outcome miss'; outcome.textContent='NO GOOD';
-    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. None hit. Off the rim.';
+    detail.textContent='Rolled '+rolls.join(', ')+' — needed '+s.threshold+'+. '+(s.impossible?'A 7 is impossible on a d6.':'None hit. Off the rim.');
   }
   pendingResult={shooter,made,points:s.points,zoneName:s.name,three:s.points===3};
   document.getElementById('overlay').classList.add('show');
