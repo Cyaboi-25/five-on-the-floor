@@ -7,15 +7,12 @@
 <title>Five on the Floor</title>
 <style>
   /* ============================================================
-     FIVE ON THE FLOOR — v5
+     FIVE ON THE FLOOR — v7 Step 1
      Single-file vanilla HTML/CSS/JS. No build tools, no frameworks.
 
-     v0 : named-zone board, dice shot resolution
-     v2 : 10x9 tile grid on SVG court, movement trails
-     v3 : ball carrier, passing+deflection+animation, fast burst+stamina
-     v4 : 3 action points per turn, shoot-first-only rule
-     v5 : 3-point scoring by zone, paint/dunker +1 bonus die,
-          12x11 court with the 3pt arc aligned to the tile boundary   (this build)
+     v0–v6a : see git history
+     v7s1 : 16×14 grid expansion, new court proportions, tile-map zones,
+            updated coverage thresholds (0-1/2-3/4+)   (this build)
      ============================================================ */
   :root {
     --bg:#0a0d12; --surface:#1a1d27; --surface2:#22263a;
@@ -61,8 +58,8 @@
 
   .court-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:14px; display:flex; flex-direction:column; align-items:center; gap:10px; }
-  /* v6: court is 600x564 (50ft x 47ft, 12 cols x 11 rows) */
-  .court-stage { position:relative; width:min(600px,100%); aspect-ratio:600/564; border-radius:10px;
+  /* v7s1: court is 800x700 (16 cols x 14 rows) */
+  .court-stage { position:relative; width:min(800px,100%); aspect-ratio:800/700; border-radius:10px;
     overflow:hidden; background-color:var(--wood);
     background-image:
       repeating-linear-gradient(91deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 11px),
@@ -74,7 +71,7 @@
   .fx-canvas { position:absolute; inset:0; width:100%; height:100%; z-index:6; pointer-events:none; }
   .piece-layer { position:absolute; inset:0; z-index:4; pointer-events:none; }
   .tile-grid { position:absolute; inset:0; z-index:2; display:grid;
-    grid-template-columns:repeat(12,1fr); grid-template-rows:repeat(11,1fr); }
+    grid-template-columns:repeat(16,1fr); grid-template-rows:repeat(14,1fr); }
   .tile { position:relative; border:1px solid rgba(255,255,255,0.06); cursor:pointer; transition:background .1s ease, box-shadow .1s ease; }
   .tile:hover { background:rgba(255,255,255,0.08) !important; }
   .tile.legal { box-shadow:inset 0 0 0 2px rgba(255,255,255,0.5); background:rgba(255,255,255,0.10) !important; }
@@ -248,35 +245,33 @@
   <div class="main">
     <div class="court-panel">
       <div id="courtStage" class="court-stage">
-        <!-- v6 REALISTIC half court (viewBox 600x564 = 50ft x 47ft, hoop bottom-center).
-             Numbers match the geometry constants in JS so the drawn arc == the 2pt/3pt
-             zone boundary. -->
-        <svg class="court-svg" viewBox="0 0 600 564" preserveAspectRatio="none" aria-hidden="true">
+        <!-- v7s1: 16×14 grid at 800×700. Court markings aligned to tile-map zone boundaries. -->
+        <svg class="court-svg" viewBox="0 0 800 700" preserveAspectRatio="none" aria-hidden="true">
           <g fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2">
-            <rect x="2" y="2" width="596" height="560" rx="2"/>
-            <!-- half-court line circle (top edge) -->
-            <path d="M228,2 A72,72 0 0 1 372,2"/>
-            <!-- painted lane / key: 16ft wide, free-throw line to baseline -->
-            <rect x="204" y="336" width="192" height="228" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.5)"/>
-            <!-- free-throw circle = TOP OF THE KEY (solid top half, dashed bottom half) -->
-            <path d="M228,336 A72,72 0 0 1 372,336"/>
-            <path d="M228,336 A72,72 0 0 0 372,336" stroke-dasharray="7 7"/>
+            <rect x="2" y="2" width="796" height="696" rx="2"/>
+            <!-- half-court circle (top edge) -->
+            <path d="M325,2 A75,75 0 0 1 475,2"/>
+            <!-- painted lane / key: cols 5-10 (x 250-550), rows 7-13 (y 350-700) -->
+            <rect x="250" y="350" width="300" height="350" fill="rgba(180,60,40,0.18)" stroke="rgba(255,255,255,0.5)"/>
+            <!-- free-throw circle at top of paint (solid top, dashed bottom) -->
+            <path d="M325,350 A75,75 0 0 1 475,350"/>
+            <path d="M325,350 A75,75 0 0 0 475,350" stroke-dasharray="7 7"/>
             <!-- backboard + rim + restricted-area arc -->
-            <line x1="270" y1="513" x2="330" y2="513" stroke-width="3"/>
-            <circle cx="300" cy="501" r="9" stroke="#E8A030"/>
-            <path d="M252,501 A48,48 0 0 1 348,501"/>
+            <line x1="365" y1="680" x2="435" y2="680" stroke-width="3"/>
+            <circle cx="400" cy="668" r="10" stroke="#E8A030"/>
+            <path d="M350,668 A50,50 0 0 1 450,668"/>
           </g>
-          <!-- THE 3-POINT LINE: corner straight segments + curved arc (radius 285 about the hoop) -->
+          <!-- 3-POINT LINE: corner straights + curved arc separating 3pt/2pt zones -->
           <g fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5">
-            <line x1="84" y1="564" x2="84" y2="315"/>
-            <line x1="516" y1="564" x2="516" y2="315"/>
-            <path d="M84,315 A285,285 0 0 1 516,315"/>
+            <line x1="150" y1="700" x2="150" y2="275"/>
+            <line x1="650" y1="700" x2="650" y2="275"/>
+            <path d="M150,275 A363,363 0 0 1 650,275"/>
           </g>
         </svg>
         <div id="tileGrid" class="tile-grid"></div>
-        <canvas id="trailCanvas" class="trail-canvas" width="600" height="564"></canvas>
+        <canvas id="trailCanvas" class="trail-canvas" width="800" height="700"></canvas>
         <div id="pieceLayer" class="piece-layer"></div>
-        <canvas id="fxCanvas" class="fx-canvas" width="600" height="564"></canvas>
+        <canvas id="fxCanvas" class="fx-canvas" width="800" height="700"></canvas>
       </div>
       <div id="zonePill" class="zone-pill"><span class="pill-muted">Select a piece to see its spot</span></div>
     </div>
@@ -366,8 +361,8 @@
           Dice = coverage (tile distance to nearest defender). <b>Large</b> pieces get <b>+1 die</b> in the Paint/Dunker (cap 5):
           <table>
             <tr><th>Coverage</th><th>Base</th><th>Large in paint</th></tr>
-            <tr><td>Wide Open (3+ tiles)</td><td>3</td><td class="g3">4</td></tr>
-            <tr><td>Open (2 tiles)</td><td>2</td><td class="g3">3</td></tr>
+            <tr><td>Wide Open (4+ tiles)</td><td>3</td><td class="g3">4</td></tr>
+            <tr><td>Open (2–3 tiles)</td><td>2</td><td class="g3">3</td></tr>
             <tr><td>Contested (0–1 tiles)</td><td>1</td><td class="g3">2</td></tr>
           </table>
           <div style="margin-top:6px;font-size:11.5px;color:var(--muted);">Clock ≤ 6 → −1 die (min 1).</div>
@@ -410,43 +405,29 @@
 
 <script>
 /* ============================================================
-   BOARD GEOMETRY — v6: realistic half court, 12 columns x 11 rows
-   Stage is 600x564 px = a real 50ft x 47ft half court (12 px/ft).
-   Hoop at bottom-center. Zones are derived GEOMETRICALLY from the real
-   court markings below, so the drawn 3-point arc IS the 2pt/3pt boundary.
-   The SAME numbers are hard-coded in the SVG markings (keep them in sync).
+   BOARD GEOMETRY — v7s1: 16 columns × 14 rows, 800×700 px
+   Zones are classified by a TILE MAP (col,row ranges) aligned to the
+   SVG court markings. The drawn 3-point arc matches the zone boundaries.
    ============================================================ */
-const COLS=12, ROWS=11, STAGE_W=600, STAGE_H=564;
-const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;   // 50 x 51.27
+const COLS=16, ROWS=14, STAGE_W=800, STAGE_H=700;
+const TILE_W=STAGE_W/COLS, TILE_H=STAGE_H/ROWS;   // 50 x 50
+const RIM={col:7.5,row:13};      // hoop tile (for "toward basket" moves)
 
-// --- court markings in px (12 px per foot) ---
-const HOOP={x:300,y:501};        // basket center (5'3" off baseline)
-const ARC_R=285;                 // 3-pt arc radius (23'9")
-const LANE_L=204, LANE_R=396;    // free-throw lane / paint, 16ft wide
-const FT_Y=336;                  // free-throw line (top of paint / top of key), 19ft off baseline
-const CORNER_X_L=84, CORNER_X_R=516; // corner-3 lines (widened from 3ft → 7ft so corner tiles are playable)
-const ARC_BREAK_Y=315;           // where the corner lines meet the arc
-const RIM={col:5.5,row:10};      // hoop tile (for "toward basket" moves)
-
-// Classify a tile into a zone purely from where its CENTER falls on the real court.
+// Classify a tile by its grid position (tile-map approach for 16×14).
 // 2pt: pt, dkl, dkr, el, er.  3pt: cl, cr, wl, wr, tok, hc.
 function classifyZone(col,row){
-  const cx=(col+0.5)*TILE_W, cy=(row+0.5)*TILE_H;
-  const d=Math.hypot(cx-HOOP.x, cy-HOOP.y);
-  const inLaneX=cx>=LANE_L && cx<=LANE_R;
-  if(cy < TILE_H) return 'hc';                       // top row = backcourt bring-up (3pt desperation)
-  if(inLaneX && cy>=FT_Y) return 'pt';               // the painted lane
-  if(cy>=470 && !inLaneX){                            // low blocks just outside the lane = dunker spots
-    if(cx>=CORNER_X_L && cx<LANE_L) return 'dkl';
-    if(cx>LANE_R && cx<=CORNER_X_R) return 'dkr';
-  }
-  // Inside the 3-pt line? Below the arc break the boundary is the straight corner
-  // lines; above it, the curved arc. (This keeps corner-3 at the BASELINE corners.)
-  const inside = (cy>=ARC_BREAK_Y) ? (cx>=CORNER_X_L && cx<=CORNER_X_R) : (d<=ARC_R);
-  if(inside) return cx<HOOP.x?'el':'er';             // inside the line, outside paint = elbow / mid-range 2
-  if(cy>=ARC_BREAK_Y) return cx<HOOP.x?'cl':'cr';    // low & beyond the corner line = corner 3
-  if(cx>=LANE_L && cx<=LANE_R) return 'tok';         // upper-center, outside arc = top of key 3
-  return cx<HOOP.x?'wl':'wr';                          // upper-side, outside arc = wing 3
+  if(col>=5 && col<=10 && row>=7 && row<=13) return 'pt';
+  if(col>=3 && col<=4 && row>=8 && row<=13) return 'dkl';
+  if(col>=11 && col<=12 && row>=8 && row<=13) return 'dkr';
+  if(col<=2 && row>=5) return 'cl';
+  if(col>=13 && row>=5) return 'cr';
+  if(col>=3 && col<=5 && row>=4 && row<=7) return 'el';
+  if(col>=10 && col<=12 && row>=4 && row<=7) return 'er';
+  if(col>=6 && col<=9 && row>=5 && row<=6) return col<8?'el':'er';
+  if(col>=5 && col<=10 && row>=2 && row<=4) return 'tok';
+  if(col<=4 && row>=1 && row<=5) return 'wl';
+  if(col>=11 && row>=1 && row<=5) return 'wr';
+  return 'hc';
 }
 // Precomputed zone grid (built at boot) so zoneAt() is a cheap lookup.
 let ZONE_GRID=[];
@@ -477,12 +458,12 @@ const ZONE_TINT={ pt:'rgba(232,80,80,0.12)', cl:'rgba(61,186,110,0.10)', cr:'rgb
   wl:'rgba(74,158,232,0.08)', wr:'rgba(74,158,232,0.08)', el:'rgba(232,160,48,0.08)', er:'rgba(232,160,48,0.08)',
   tok:'rgba(140,90,200,0.08)', dkl:'rgba(232,80,80,0.08)', dkr:'rgba(232,80,80,0.08)', hc:'rgba(100,100,120,0.06)' };
 
-// Named-spot labels — keyed "col,row", placed on the v6 geometry.
-let NAMED_SPOTS={ '5,6':'nail','6,6':'nail','2,9':'dunker','9,9':'dunker','1,9':'corner','10,9':'corner','1,2':'wing','10,2':'wing' };
+// Named-spot labels — keyed "col,row", placed on the v7 16×14 grid.
+let NAMED_SPOTS={ '7,7':'nail','8,7':'nail','4,10':'dunker','11,10':'dunker','1,8':'corner','14,8':'corner','2,3':'wing','13,3':'wing' };
 
-// Starting positions (verified against the v6 geometry: ball up top, spread set)
-const OFFENSE_START=[{col:6,row:0},{col:1,row:3},{col:6,row:2},{col:10,row:3},{col:8,row:6}];
-const DEFENSE_START=[{col:2,row:3},{col:6,row:3},{col:9,row:3},{col:4,row:6},{col:7,row:6}];
+// Starting positions for 16×14 grid (from v7 brief, defense offset to avoid stacking)
+const OFFENSE_START=[{col:8,row:0},{col:2,row:3},{col:8,row:3},{col:13,row:3},{col:10,row:6}];
+const DEFENSE_START=[{col:3,row:3},{col:9,row:3},{col:12,row:3},{col:5,row:6},{col:7,row:7}];
 
 const FAST_OFFENSE=[0,3];  // O1, O4
 const FAST_DEFENSE=[0,3];  // D1, D4
@@ -553,8 +534,9 @@ function coverageFor(col,row){
   const defenders=state.pieces.filter(p=>p.role==='defense');
   let min=Infinity;
   for(const d of defenders){ const dist=chebyshev({col,row},d); if(dist<min) min=dist; }
+  // v7s1: scaled for 16×14 grid — 0-1=contested, 2-3=open, 4+=wide open
   if(min<=1) return {label:'Contested',dice:1};
-  if(min===2) return {label:'Open',dice:2};
+  if(min<=3) return {label:'Open',dice:2};
   return {label:'Wide Open',dice:3};
 }
 
