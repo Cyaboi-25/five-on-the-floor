@@ -328,8 +328,9 @@
           One offense piece is the <b>ball carrier</b> (orange dot). Only the ball carrier shoots or passes.
           <b>Pass</b> moves the ball — defenders in the lane can <b>deflect</b> for a steal.
 
-          <h3>Fast Pieces ⚡ + Stamina</h3>
-          ⚡ pieces can <b>burst 2 tiles</b> (gold tiles) for 1 stamina. Stamina refills each possession.
+          <h3>Speed Rating + Stamina</h3>
+          Each piece has a <b>Speed</b> (1 or 2). <b>Speed 2</b> (small guards) can <b>burst 2 tiles</b> (gold tiles) for 1 stamina.
+          Speed 1 pieces move 1 tile per action. Stamina refills each possession.
 
           <h3>Piece Sizes</h3>
           Every piece has a size shown on its circle (<b>S</b>/<b>M</b>/<b>L</b>):
@@ -465,8 +466,8 @@ let NAMED_SPOTS={ '7,7':'nail','8,7':'nail','4,10':'dunker','11,10':'dunker','1,
 const OFFENSE_START=[{col:8,row:0},{col:2,row:3},{col:8,row:3},{col:13,row:3},{col:10,row:6}];
 const DEFENSE_START=[{col:3,row:3},{col:9,row:3},{col:12,row:3},{col:5,row:6},{col:7,row:7}];
 
-const FAST_OFFENSE=[0,3];  // O1, O4
-const FAST_DEFENSE=[0,3];  // D1, D4
+// v7s2: Speed rating per piece (1/2/3). Speed 3 only via Franchise card (Step 13).
+const PIECE_SPEEDS={ o0:2, o1:2, o2:1, o3:1, o4:1, d0:2, d1:2, d2:1, d3:1, d4:1 };
 const START_STAMINA=3;
 
 const WIN_SCORE=21;
@@ -496,10 +497,10 @@ function undoMove(){
 
 function freshPieces(){
   const pieces=[];
-  OFFENSE_START.forEach((s,i)=>{ const id='o'+i, fast=FAST_OFFENSE.includes(i);
-    pieces.push({id,role:'offense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,size:PIECE_SIZES[id],paintTurns:0}); });
-  DEFENSE_START.forEach((s,i)=>{ const id='d'+i, fast=FAST_DEFENSE.includes(i);
-    pieces.push({id,role:'defense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],fast,stamina:fast?START_STAMINA:0,contesting:false,size:PIECE_SIZES[id],paintTurns:0}); });
+  OFFENSE_START.forEach((s,i)=>{ const id='o'+i, spd=PIECE_SPEEDS[id];
+    pieces.push({id,role:'offense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],speed:spd,stamina:spd>=2?START_STAMINA:0,size:PIECE_SIZES[id],paintTurns:0}); });
+  DEFENSE_START.forEach((s,i)=>{ const id='d'+i, spd=PIECE_SPEEDS[id];
+    pieces.push({id,role:'defense',col:s.col,row:s.row,trail:[{col:s.col,row:s.row}],speed:spd,stamina:spd>=2?START_STAMINA:0,contesting:false,size:PIECE_SIZES[id],paintTurns:0}); });
   return pieces;
 }
 function initState(){
@@ -609,9 +610,9 @@ function renderPieces(){
     el.style.left=((p.col+0.5)/COLS*100)+'%';
     el.style.top=((p.row+0.5)/ROWS*100)+'%';
     el.textContent=circleText(p);  // v6a: size letter + number, e.g. "L5"
-    el.title=pieceLabel(p)+' · '+p.size;
+    el.title=pieceLabel(p)+' · '+p.size+' · spd '+p.speed;
     if(isBallCarrier(p)){ const b=document.createElement('div'); b.className='ball-dot'; el.appendChild(b); }
-    if(p.fast){ const f=document.createElement('div'); f.className='fast-bolt'; f.textContent='⚡'+p.stamina; el.appendChild(f); }
+    if(p.speed>=2){ const f=document.createElement('div'); f.className='fast-bolt'; f.textContent='⚡'+p.stamina; el.appendChild(f); }
     if(p.role==='offense' && p.paintTurns>=1){
       const pb=document.createElement('div'); pb.className='paint-badge';
       pb.textContent = p.paintTurns>=2 ? ('⚠'+p.paintTurns) : String(p.paintTurns);
@@ -628,7 +629,7 @@ function renderLegal(){
   if(!state.selectedPiece) return;
   const sel=getPiece(state.selectedPiece);
   if(!sel || sel.role!==state.phase || state.actionPointsRemaining<=0) return;
-  const canBurst=sel.fast && sel.stamina>0;
+  const canBurst=sel.speed>=2 && sel.stamina>0;
   document.querySelectorAll('.tile').forEach(t=>{
     const c=+t.dataset.col, r=+t.dataset.row, d=chebyshev(sel,{col:c,row:r});
     if(d===1) t.classList.add('legal'); else if(d===2 && canBurst) t.classList.add('legal-burst');
@@ -744,7 +745,7 @@ function renderZonePill(){
   let html=circleText(sel)+' <span class="pill-sep">('+sel.size+') in</span> <span class="pill-zone">'+s.name+'</span>';
   html+=' <span class="pill-sep">·</span> <span class="'+(three?'pts3':'pts2')+'">'+s.points+' pts</span>';
   if(isBallCarrier(sel)) html+=' <span class="pill-ball">●ball</span>';
-  if(sel.fast) html+=' <span class="pill-sep">·</span> ⚡'+sel.stamina;
+  if(sel.speed>=2) html+=' <span class="pill-sep">·</span> spd'+sel.speed+' ⚡'+sel.stamina;
   if(sel.role==='offense') html+=' <span class="pill-sep">·</span> '+s.dice+'d · need '+(s.impossible?(s.threshold+'+ ⚠️'):(s.threshold+'+'));
   pill.innerHTML=html;
 }
@@ -880,14 +881,14 @@ function onPieceClick(id){
   if(sel && sel.id!==id && sel.role===state.phase && state.actionPointsRemaining>0){
     const d=chebyshev(sel,p);
     if(d===1) return moveTile(sel,p.col,p.row,false);
-    if(d===2 && sel.fast && sel.stamina>0) return moveTile(sel,p.col,p.row,true);
+    if(d===2 && sel.speed>=2 && sel.stamina>0) return moveTile(sel,p.col,p.row,true);
   }
   if(p.role!==state.phase){ setStatus("It's the "+state.phase+" team's turn.", 'error'); return; }
   if(state.selectedPiece===id){ state.selectedPiece=null; setStatus('Deselected.', null); }
   else {
     state.selectedPiece=id;
     const s=computeShot(p.col,p.row,p.size);
-    setStatus('Selected '+pieceLabel(p)+' ('+p.size+')'+(isBallCarrier(p)?' (has the ball)':'')+' in '+s.name+' ('+s.points+'pt) — tap a highlighted tile to move, or pick an action.', null);
+    setStatus('Selected '+pieceLabel(p)+' ('+p.size+', spd '+p.speed+')'+(isBallCarrier(p)?' (has the ball)':'')+' in '+s.name+' ('+s.points+'pt) — tap a highlighted tile to move, or pick an action.', null);
   }
   renderAll();
 }
@@ -910,13 +911,13 @@ function onTileClick(col,row){
   const d=chebyshev(sel,{col,row});
   if(d===0) return;
   if(d===1) return moveTile(sel,col,row,false);
-  if(d===2 && sel.fast && sel.stamina>0) return moveTile(sel,col,row,true);
-  if(d===2 && sel.fast && sel.stamina<=0){ setStatus('Out of stamina — '+pieceLabel(sel)+' can only burst with stamina.', 'error'); return; }
-  setStatus('Too far — move 1 tile'+(sel.fast?' (or 2 with a ⚡ burst)':'')+'.', 'error');
+  if(d===2 && sel.speed>=2 && sel.stamina>0) return moveTile(sel,col,row,true);
+  if(d===2 && sel.speed>=2 && sel.stamina<=0){ setStatus('Out of stamina — '+pieceLabel(sel)+' can only burst with stamina.', 'error'); return; }
+  setStatus('Too far — move 1 tile'+(sel.speed>=2?' (or 2 with a ⚡ burst)':'')+'.', 'error');
 }
 function moveTile(piece,col,row,burst){
   if(state.actionPointsRemaining<1) return;
-  if(burst && (!piece.fast||piece.stamina<=0)) return;
+  if(burst && (piece.speed<2||piece.stamina<=0)) return;
   pushUndo();
   if(burst){ piece.stamina-=1; }
   const fromZone=ZONE_INFO[zoneAt(piece.col,piece.row)].name, toZone=ZONE_INFO[zoneAt(col,row)].name;
